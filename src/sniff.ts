@@ -12,13 +12,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { parse as parseYaml } from "yaml";
 import { initEnv, saveSteamKeys } from "./globalConfig.js";
 import { fetchOwnedAppIds, resolveToSteamId } from "./steamid.js";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const ENV_FILE = resolve(ROOT, ".env");
-const AUDIENCE_FILE = resolve(ROOT, "audience.yaml");
 
 function isLocalhostUrl(value: string): boolean {
   try {
@@ -27,14 +25,6 @@ function isLocalhostUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function parseAppIds(input: string): number[] {
-  const ids = input
-    .split(",")
-    .map((t) => Number(t.trim()))
-    .filter((n) => Number.isInteger(n) && n > 0);
-  return [...new Set(ids)];
 }
 
 // ─── 키 입력 ────────────────────────────────────────────────────
@@ -255,46 +245,6 @@ async function secretInput(ks: KeyStream, message: string): Promise<string> {
   }
 }
 
-// ─── 모델 목록 조회 ─────────────────────────────────────────────
-
-const MODELS_TIMEOUT_MS = 10_000;
-
-export async function fetchModels(baseURL: string, apiKey?: string): Promise<string[]> {
-  try {
-    const endpoint = `${baseURL.replace(/\/+$/, "")}/models`;
-    const headers: Record<string, string> = {};
-    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
-    const res = await fetch(endpoint, {
-      signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
-      headers,
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { data?: Array<{ id?: unknown }> };
-    const ids = (data.data ?? [])
-      .map((d) => d.id)
-      .filter((id): id is string => typeof id === "string" && id.length > 0);
-    return [...new Set(ids)];
-  } catch {
-    return [];
-  }
-}
-
-async function chooseModel(
-  ks: KeyStream,
-  baseURL: string,
-  apiKey: string | undefined,
-  fallbackDefault: string,
-): Promise<string> {
-  if (apiKey) {
-    const ids = await fetchModels(baseURL, apiKey);
-    if (ids.length > 0) {
-      const idx = await menu(ks, "모델 선택", ids);
-      return ids[idx] ?? fallbackDefault;
-    }
-  }
-  return textInput(ks, "모델명", fallbackDefault);
-}
-
 // ─── env 저장 (로컬 .env 전용 — 전역 파일에는 쓰지 않는다) ───
 
 async function saveEnv(entries: Record<string, string>): Promise<void> {
@@ -310,36 +260,6 @@ async function saveEnv(entries: Record<string, string>): Promise<void> {
   }
   await writeFile(ENV_FILE, `${lines.join("\n").trim()}\n`, "utf-8");
   for (const [key, value] of Object.entries(entries)) process.env[key] = value;
-}
-
-// ─── audience.yaml surgical 저장 ────────────────────────────────
-// 전체 stringify 재쓰기 금지(포맷 churn 방지). library/wishlist 2개
-// 최상위 키의 라인(플로·블록 리스트 모두)만 교체하고, personalize 키는
-// 발견되면 삭제한다. 나머지 원문은 그대로 둔다.
-
-function formatIdList(ids: number[]): string {
-  return `[${ids.join(", ")}]`;
-}
-
-export function patchAudienceYaml(
-  raw: string,
-  patch: { library_appids: number[]; wishlist_appids: number[] },
-): string {
-  const replacements: Array<[RegExp, string]> = [
-    [/^library_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `library_appids: ${formatIdList(patch.library_appids)}`],
-    [/^wishlist_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `wishlist_appids: ${formatIdList(patch.wishlist_appids)}`],
-  ];
-  let out = raw.replace(/^personalize:[^\n]*(?:\n[ \t]+-[^\n]*)*\n?/m, "");
-  for (const [re, line] of replacements) {
-    if (re.test(out)) {
-      out = out.replace(re, line);
-    } else if (out.trim() === "") {
-      out = `${line}\n`;
-    } else {
-      out = `${out.replace(/\n?$/, "\n")}${line}\n`;
-    }
-  }
-  return out;
 }
 
 // ─── 메인 ───────────────────────────────────────────────────────
@@ -365,54 +285,47 @@ async function main(): Promise<void> {
     }
     apiKey = await secretInput(ks, "API 키");
     if (!apiKey && process.env.OPENAI_API_KEY) apiKey = process.env.OPENAI_API_KEY;
-    model = await chooseModel(ks, baseURL, apiKey || undefined, process.env.MODEL || "gpt-4o-mini");
+    process.stdout.write("예: gpt-4o-mini, gpt-4o\n");
+    model = await textInput(ks, "모델명", process.env.MODEL || "gpt-4o-mini");
   } else if (provider === 1) {
     header("로컬 모델 설정");
     const existingBase = process.env.OPENAI_BASE_URL ?? "";
     const localDefault = isLocalhostUrl(existingBase) ? existingBase : "http://localhost:11434/v1";
     baseURL = await textInput(ks, "베이스 URL", localDefault);
     apiKey = await secretInput(ks, "API 키 (없으면 Enter)");
-    model = await chooseModel(ks, baseURL, apiKey || undefined, process.env.MODEL || "llama3.1");
+    process.stdout.write("예: qwen3:8b, llama3.1\n");
+    model = await textInput(ks, "모델명", process.env.MODEL || "llama3.1");
   }
 
-  header("게임 라이브러리 설정");
-  const audRaw = await readFile(AUDIENCE_FILE, "utf-8");
-  const aud = parseYaml(audRaw) as {
-    library_appids: number[];
-    wishlist_appids: number[];
-    [key: string]: unknown;
-  };
-  let libraryAppIds: number[] = Array.isArray(aud.library_appids) ? aud.library_appids : [];
-  let wishlistAppIds: number[] = Array.isArray(aud.wishlist_appids) ? aud.wishlist_appids : [];
-  const libInput = await textInput(ks, "라이브러리 appID (쉼표 구분)", libraryAppIds.join(", "));
-  if (libInput.trim()) libraryAppIds = parseAppIds(libInput);
-  const wishInput = await textInput(ks, "위시리스트 appID (쉼표 구분)", wishlistAppIds.join(", "));
-  if (wishInput.trim()) wishlistAppIds = parseAppIds(wishInput);
-
-  header("Steam 연동");
+  header("Steam 등록");
   let steamKey = process.env.STEAM_API_KEY || "";
   let steamId64 = process.env.STEAM_ID || "";
-  process.stdout.write(`현재 키: ${steamKey ? "전역 설정에 등록됨" : "(미등록)"}\n`);
+  process.stdout.write(`현재: ${steamKey && steamId64 ? "전역 설정에 등록됨" : "(미등록)"}\n`);
   const steamInput = await textInput(
     ks,
-    "Steam 프로필 (URL·ID·vanity, Enter=건너뛰기)",
+    "SteamID (17자리 숫자·프로필 URL·vanity, Enter=건너뛰기)",
     steamId64,
   );
   if (steamInput.trim()) {
     if (!steamKey) steamKey = await secretInput(ks, "Steam API 키 (없으면 Enter)");
     if (!steamKey) {
-      process.stdout.write("키가 없어 Steam 연동을 건너뜁니다.\n");
+      process.stdout.write("키가 없어 Steam 등록을 건너뜁니다.\n");
+      steamId64 = "";
     } else {
       try {
         steamId64 = await resolveToSteamId(steamInput, steamKey);
         const owned = await fetchOwnedAppIds(steamKey, steamId64);
-        libraryAppIds = [...new Set(owned)];
         await saveSteamKeys({ STEAM_API_KEY: steamKey, STEAM_ID: steamId64 });
-        process.stdout.write(`Steam 보유 ${owned.length}건을 라이브러리에 반영하고 키를 전역 설정에 저장했습니다.\n`);
+        process.stdout.write(
+          `SteamID ${steamId64} (보유 ${owned.length}건 확인)를 전역 설정에 저장했습니다. appID는 묻지 않습니다.\n`,
+        );
       } catch (err) {
-        process.stdout.write(`Steam 연동 실패: ${err instanceof Error ? err.message : String(err)}\n수동 입력값을 유지합니다.\n`);
+        process.stdout.write(`Steam 등록 실패: ${err instanceof Error ? err.message : String(err)}\n`);
+        steamId64 = "";
       }
     }
+  } else {
+    steamId64 = "";
   }
 
   header("발행 설정");
@@ -428,9 +341,7 @@ async function main(): Promise<void> {
   process.stdout.write(`모델: ${provider === 2 ? "(미사용)" : model}\n`);
   process.stdout.write(`API 키: ${maskValue(provider === 2 ? "" : apiKey)}\n`);
   process.stdout.write(`Discord 웹훅: ${maskValue(finalWebhook)}\n`);
-  process.stdout.write(`라이브러리: [${libraryAppIds.join(", ")}]\n`);
-  process.stdout.write(`위시리스트: [${wishlistAppIds.join(", ")}]\n`);
-  process.stdout.write(`Steam: ${steamId64 ? `연동 (${libraryAppIds.length}건 반영)` : "미연동"}\n`);
+  process.stdout.write(`Steam: ${steamId64 ? `등록 (${steamId64})` : "미등록"}\n`);
   const action = await menu(ks, "어떻게 할까요", ["저장 후 실행", "저장만", "취소"]);
   ks.close();
 
@@ -444,21 +355,24 @@ async function main(): Promise<void> {
     MODEL: model,
     DISCORD_WEBHOOK_URL: finalWebhook,
   });
-  await writeFile(
-    AUDIENCE_FILE,
-    patchAudienceYaml(audRaw, {
-      library_appids: libraryAppIds,
-      wishlist_appids: wishlistAppIds,
-    }),
-    "utf-8",
-  );
+  // appID는 audience.yaml에 쓰지 않는다. 티어는 런타임에 SteamID로 확정한다.
   console.log(`저장 완료: ${ENV_FILE}`);
 
   if (action === 0) {
     const { runPipeline } = await import("./graph.js");
     const { parse: parseYaml } = await import("yaml");
     const { appendFile, mkdir } = await import("node:fs/promises");
-    const audienceRaw = await readFile(resolve(ROOT, "audience.yaml"), "utf-8");
+    // audience.yaml(개인 설정) 우선, 없으면 audience.sample.yaml(샘플) 폴백.
+    // run.ts는 main()을 무조건 실행하므로 import하지 않고 여기서 직접 읽는다.
+    let audienceRaw: string | null = null;
+    for (const name of ["audience.yaml", "audience.sample.yaml"]) {
+      const candidate = resolve(ROOT, name);
+      if (existsSync(candidate)) {
+        audienceRaw = await readFile(candidate, "utf-8");
+        break;
+      }
+    }
+    if (audienceRaw === null) throw new Error("audience.yaml 또는 audience.sample.yaml이 필요합니다.");
     const aud = parseYaml(audienceRaw);
     const outPath = resolve(ROOT, "output/latest.md");
     const metricsPath = resolve(ROOT, "store/metrics.jsonl");

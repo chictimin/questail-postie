@@ -103,15 +103,23 @@ export async function fetchOwnedGamesDetail(
     }));
 }
 
-/** 최근 N일 내 플레이한 appId 목록 (rtime_last_played 기준) — Tier1. 읽기 전용. */
+/** 최근 N일 내 플레이한 appId 목록 (rtime_last_played 내림차순, 상위 limit개) — Tier1. 읽기 전용. */
 export async function fetchRecentlyPlayedAppIds(
   apiKey: string,
   steamId: string,
   withinDays = 30,
+  limit = 15,
 ): Promise<number[]> {
   const cutoff = Math.floor(Date.now() / 1000) - withinDays * 86400;
   const games = await fetchOwnedGamesDetail(apiKey, steamId);
-  return games.filter((g) => g.rtimeLastPlayed >= cutoff).map((g) => g.appid);
+  return [
+    ...new Set(
+      games
+        .filter((g) => g.rtimeLastPlayed >= cutoff)
+        .sort((a, b) => b.rtimeLastPlayed - a.rtimeLastPlayed)
+        .map((g) => g.appid),
+    ),
+  ].slice(0, limit);
 }
 
 interface WishlistResponse {
@@ -122,11 +130,11 @@ interface WishlistResponse {
 
 /**
  * 위시리스트 appId 전수 조회 — Tier0. 읽기 전용.
- * IStoreService/GetWishlist는 공개 API에서 제거된 상태(2026-09 실측 404)라
- * 실패 시 빈 배열을 반환하고 호출자가 audience.yaml로 폴백한다.
+ * IWishlistService/GetWishlist/v1 (SteamID당 위시 전수 반환, 실측 51건).
+ * 실패 시 빈 배열을 반환하고 호출자가 계속 진행한다.
  */
 export async function fetchWishlistAppIds(apiKey: string, steamId: string): Promise<number[]> {
-  const data = await steamGet<WishlistResponse>("/IStoreService/GetWishlist/v1/", {
+  const data = await steamGet<WishlistResponse>("/IWishlistService/GetWishlist/v1/", {
     key: apiKey,
     steamid: steamId,
   });

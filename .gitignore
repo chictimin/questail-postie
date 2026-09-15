@@ -1,7 +1,8 @@
 node_modules/
 dist/
 .env
-store/metrics.jsonl
-output/
+audience.yaml
+output/*
+!output/latest.md
 *.log
 .DS_Store

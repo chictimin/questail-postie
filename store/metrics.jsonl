@@ -1,0 +1,198 @@
+{"ts":"2026-09-15T02:59:21.163Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T02:59:21.165Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T02:59:21.165Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T02:59:21.166Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T02:59:21.167Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T02:59:21.168Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass rss-d0afd501e9a30b97:pass rss-1c3b863890ddf3d8:pass"}
+{"ts":"2026-09-15T02:59:24.229Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:02:21.049Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:02:21.050Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:02:21.051Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:02:21.052Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:02:21.052Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:02:21.054Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass rss-d0afd501e9a30b97:pass rss-1c3b863890ddf3d8:pass"}
+{"ts":"2026-09-15T03:02:21.055Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:03:23.184Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:03:23.186Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:03:23.187Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:03:23.189Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:03:23.190Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:03:23.193Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass rss-56d9f0d815c09696:pass"}
+{"ts":"2026-09-15T03:03:23.195Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:03:30.110Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:03:30.111Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:03:30.112Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:03:30.112Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:03:30.113Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:03:30.114Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:03:30.116Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:06:19.352Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:06:19.354Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:06:19.355Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:06:19.355Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:06:19.356Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:06:19.357Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:06:19.358Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:07:30.528Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:07:30.529Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:07:30.529Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:07:30.530Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:07:30.531Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:07:30.532Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:07:30.533Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:08:54.730Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:08:54.731Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:08:54.732Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:08:54.733Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:08:54.733Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:08:54.735Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass rss-d0afd501e9a30b97:pass rss-1c3b863890ddf3d8:pass"}
+{"ts":"2026-09-15T03:08:54.736Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:09:30.825Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:09:30.826Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:09:30.827Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:09:30.828Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:09:30.828Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:09:30.830Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass rss-d0afd501e9a30b97:pass rss-1c3b863890ddf3d8:pass"}
+{"ts":"2026-09-15T03:09:30.831Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:10:52.856Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:10:52.857Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:10:52.858Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:10:52.859Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:10:52.860Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T03:10:52.861Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass rss-56d9f0d815c09696:pass"}
+{"ts":"2026-09-15T03:10:52.862Z","stage":"publish","count":5,"detail":"delivered=false"}
+{"ts":"2026-09-15T03:12:29.196Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:12:29.197Z","stage":"personalize","count":3,"detail":"mode=personal"}
+{"ts":"2026-09-15T03:12:29.198Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:12:29.198Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:12:38.873Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:12:38.875Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:12:39.648Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:15:52.697Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:15:52.698Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:15:52.699Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:15:52.699Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:16:03.035Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:16:03.038Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass rss-56d9f0d815c09696:pass"}
+{"ts":"2026-09-15T03:16:03.399Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:16:47.404Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:16:47.405Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:16:47.406Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:16:47.407Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:16:54.034Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:16:54.036Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:16:54.403Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:20:12.557Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:20:12.559Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:20:12.559Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:20:12.560Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:20:19.581Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:20:19.584Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass rss-56d9f0d815c09696:pass"}
+{"ts":"2026-09-15T03:20:20.686Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:21:06.007Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:21:06.008Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:21:06.009Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:21:06.010Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:21:13.295Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:21:13.297Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass rss-56d9f0d815c09696:pass"}
+{"ts":"2026-09-15T03:21:14.326Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:25:46.798Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:25:46.800Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:25:46.800Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:25:46.801Z","stage":"rank","count":5,"detail":"labels=library-title+recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:25:54.235Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:25:54.238Z","stage":"verify","count":5,"detail":"rss-630268218cf291bf:pass rss-2f4aad116609d94f:pass rss-fef4667d6fca3f0b:pass rss-6bf36afcac72141a:pass rss-40f2b6f3d54b0745:pass"}
+{"ts":"2026-09-15T03:25:55.422Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:25:56.331Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:27:01.280Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:27:01.281Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:27:01.282Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:27:01.283Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:27:09.333Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:27:10.902Z","stage":"verify","count":5,"detail":"rss-7f18b06fb0a5baed:pass rss-f05a8082df8ac6fe:pass(regen) rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass"}
+{"ts":"2026-09-15T03:27:12.589Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:27:13.357Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:27:43.116Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:27:43.118Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:27:43.118Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:27:43.119Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:27:50.640Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:27:50.642Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:27:51.667Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:27:52.550Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:31:03.482Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:31:03.483Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:31:03.483Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:31:03.484Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:31:12.143Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:31:12.145Z","stage":"verify","count":5,"detail":"rss-7f18b06fb0a5baed:pass rss-f05a8082df8ac6fe:pass rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass"}
+{"ts":"2026-09-15T03:31:13.658Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:31:16.509Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:31:05.539Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:31:05.540Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:31:05.541Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:31:05.541Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:31:13.738Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:31:13.740Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:31:14.831Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:31:17.840Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:32:23.482Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:32:23.484Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:32:23.485Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:32:23.486Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:32:32.221Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:32:32.222Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T03:32:33.439Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:32:36.603Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T03:41:25.135Z","stage":"collect","count":45,"detail":"steam=15 rss=30"}
+{"ts":"2026-09-15T03:41:25.136Z","stage":"personalize","count":3,"detail":"library=2 wishlist=1"}
+{"ts":"2026-09-15T03:41:25.137Z","stage":"filter","count":30,"detail":"pool=45"}
+{"ts":"2026-09-15T03:41:25.138Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T03:41:33.922Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T03:41:33.924Z","stage":"verify","count":5,"detail":"rss-7f18b06fb0a5baed:pass rss-f05a8082df8ac6fe:pass rss-6bf36afcac72141a:pass rss-5d85817c539b0584:pass rss-885877ec427e1764:pass"}
+{"ts":"2026-09-15T03:41:35.518Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T03:41:37.904Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T04:12:48.378Z","stage":"collect","count":50,"detail":"steam=20(fresh=20 sale=0) rss=30 tier0=5 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T04:12:48.379Z","stage":"personalize","count":6,"detail":"library=5 wishlist=1"}
+{"ts":"2026-09-15T04:12:48.380Z","stage":"filter","count":30,"detail":"pool=50"}
+{"ts":"2026-09-15T04:12:48.381Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T04:12:57.553Z","stage":"summarize","count":5,"detail":"translated=5"}
+{"ts":"2026-09-15T04:12:57.556Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T04:12:59.185Z","stage":"digest","count":1,"detail":"pool=30"}
+{"ts":"2026-09-15T04:13:02.954Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T05:26:07.750Z","stage":"collect","count":30,"detail":"steam=0(fresh=0 sale=0) rss=30 tier0=5 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T05:26:07.754Z","stage":"personalize","count":6,"detail":"library=5 wishlist=1"}
+{"ts":"2026-09-15T05:26:07.755Z","stage":"filter","count":30,"detail":"pool=30"}
+{"ts":"2026-09-15T05:26:07.757Z","stage":"rank","count":5,"detail":"labels=recent,recent,recent,recent,recent"}
+{"ts":"2026-09-15T05:26:07.759Z","stage":"summarize","count":5,"detail":"translated=0"}
+{"ts":"2026-09-15T05:26:07.761Z","stage":"verify","count":5,"detail":"rss-6bf36afcac72141a:pass rss-885877ec427e1764:pass rss-f5bce81410cdf7c2:pass rss-af74b1868fca0470:pass rss-394ab2267e0cd89c:pass"}
+{"ts":"2026-09-15T05:26:07.763Z","stage":"digest","count":0,"detail":"pool=30"}
+{"ts":"2026-09-15T05:26:09.773Z","stage":"publish","count":5,"detail":"delivered=true"}
+{"ts":"2026-09-15T06:15:04.980Z","stage":"collect","count":280,"detail":"steam=250(fresh=241 sale=9) rss=30 tier0=241 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T06:15:04.982Z","stage":"personalize","count":55,"detail":"library=5 wishlist=51"}
+{"ts":"2026-09-15T06:15:04.985Z","stage":"filter","count":58,"detail":"pool=280 personal=30 general=28"}
+{"ts":"2026-09-15T06:15:04.989Z","stage":"rank","count":8,"detail":"personal=5 labels=wishlist+wishlist-title+recent,wishlist+wishlist-title+recent,wishlist+wishlist-title+recent,wishlist+wishlist-title+recent,wishlist+wishlist-title+recent extra=3 labels=recent,recent,recent"}
+{"ts":"2026-09-15T06:15:17.133Z","stage":"summarize","count":8,"detail":"sourceKo=5"}
+{"ts":"2026-09-15T06:15:18.170Z","stage":"verify","count":7,"detail":"steam-sale-606160-2026-09-15:pass steam-sale-1527950-2026-09-15:pass steam-sale-2001120-2026-09-15:pass steam-sale-3255380-2026-09-15:pass steam-sale-4086760-2026-09-15:pass rss-9fa0e54b6611af69:pass rss-7f18b06fb0a5baed:fail(regen) rss-f05a8082df8ac6fe:pass"}
+{"ts":"2026-09-15T06:15:19.498Z","stage":"digest","count":1,"detail":"chars=263 pool=58"}
+{"ts":"2026-09-15T06:15:22.003Z","stage":"translate","count":7,"detail":"ok=2 ko=5 failed=0 skipped=0 sourceKo=5"}
+{"ts":"2026-09-15T06:15:22.445Z","stage":"publish","count":7,"detail":"delivered=true parts=1"}
+{"ts":"2026-09-15T06:15:22.450Z","stage":"verdict-fail","count":0,"detail":"rss-7f18b06fb0a5baed:재생성 후에도 실패: 원문에 없는 연도·날짜 표현: 2027 (기존 실패: 원문에 없는 연도·날짜 표현: 2027)"}
+{"ts":"2026-09-15T06:22:47.910Z","stage":"collect","count":295,"detail":"steam=265(fresh=256 sale=9) rss=30 tier0=241 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T06:22:47.913Z","stage":"personalize","count":55,"detail":"library=5 wishlist=51"}
+{"ts":"2026-09-15T06:22:47.927Z","stage":"filter","count":58,"detail":"pool=295 personal=30 general=28 sale=5"}
+{"ts":"2026-09-15T06:22:47.935Z","stage":"rank","count":8,"detail":"personal=5 labels=wishlist+wishlist-title+recent,wishlist+wishlist-title+recent,library+library-title,library+library-title,library+recent extra=3 labels=recent,recent,recent"}
+{"ts":"2026-09-15T06:23:00.455Z","stage":"summarize","count":8,"detail":"sourceKo=0"}
+{"ts":"2026-09-15T06:23:00.461Z","stage":"verify","count":8,"detail":"steam-2949320-1843481262703465:pass steam-3041230-1843481262702197:pass steam-3453910-1843481262692971:pass steam-4174310-1842846814452129:pass steam-3453910-1843481262702004:pass rss-ab33cd818e97fb97:pass rss-9fa0e54b6611af69:pass rss-6bf36afcac72141a:pass"}
+{"ts":"2026-09-15T06:23:01.983Z","stage":"digest","count":1,"detail":"chars=814 pool=58"}
+{"ts":"2026-09-15T06:23:16.433Z","stage":"translate","count":8,"detail":"ok=8 ko=0 failed=0 skipped=0 sourceKo=0"}
+{"ts":"2026-09-15T06:23:17.213Z","stage":"publish","count":8,"detail":"delivered=true parts=2 sale=5"}
+{"ts":"2026-09-15T06:27:10.476Z","stage":"collect","count":39,"detail":"steam=9(fresh=0 sale=9) rss=30 tier0=241 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T06:27:10.478Z","stage":"personalize","count":55,"detail":"library=5 wishlist=51"}
+{"ts":"2026-09-15T06:27:10.482Z","stage":"filter","count":30,"detail":"pool=39 personal=2 general=28 sale=5"}
+{"ts":"2026-09-15T06:27:10.486Z","stage":"rank","count":5,"detail":"personal=2 labels=wishlist-title+recent,wishlist-title+recent extra=3 labels=recent,recent,recent"}
+{"ts":"2026-09-15T06:28:45.785Z","stage":"summarize","count":5,"detail":"sourceKo=0"}
+{"ts":"2026-09-15T06:28:45.787Z","stage":"verify","count":5,"detail":"rss-4c56c370c0e541b4:pass rss-885877ec427e1764:pass rss-8353d82c8e613d56:pass rss-b2c40b282bcc125e:pass rss-cc025ebeddcb809e:pass"}
+{"ts":"2026-09-15T06:29:17.222Z","stage":"digest","count":1,"detail":"chars=588 pool=30"}
+{"ts":"2026-09-15T06:33:02.093Z","stage":"translate","count":5,"detail":"ok=5 ko=0 failed=0 skipped=0 sourceKo=0"}
+{"ts":"2026-09-15T06:33:02.897Z","stage":"publish","count":5,"detail":"delivered=true parts=2 sale=5"}

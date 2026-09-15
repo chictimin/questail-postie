@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ScoredItem, Summary } from "./types.js";
+import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback } from "./llmLocal.js";
 
 export interface SummarizeOptions {
   baseURL: string;
@@ -8,7 +9,8 @@ export interface SummarizeOptions {
 }
 
 const MAX_CONTENT_CHARS = 4000;
-const MAX_LINE_CHARS = 200;
+/** 원어 요약 상한. 한국어 상한(MAX_LINE_CHARS_KO)과 분리 — 값 근거는 /tmp 실측 보고 참조. */
+export const MAX_LINE_CHARS_SRC = 300;
 
 function hasKorean(text: string): boolean {
   return /[가-힣]/.test(text);
@@ -37,72 +39,67 @@ export interface GameMeta {
   platforms: string[];
 }
 
-/** LLM 없이 쓰는 폴백: 본문 앞 3문장 + 제목 기반 인사이트. 파이프라인이 멈추지 않게 한다. */
+/**
+ * LLM 없이 쓰는 폴백: 원문 앞 3문장 절취를 bullets에 넣는다.
+ * Ko 필드는 건드리지 않는다(빈 채로 두어 translate가 실패扱いで 원어 발행을 하게 한다).
+ * translated는 항상 false — "번역 성공" 의미.
+ */
 function fallbackSummary(
   item: ScoredItem,
   meta?: Map<number, GameMeta>,
 ): Summary {
   const sentences = splitSentences(item.content);
-  const bullets: [string, string, string] = [
-    truncate(sentences[0] ?? item.title, MAX_LINE_CHARS),
-    truncate(sentences[1] ?? item.title, MAX_LINE_CHARS),
-    truncate(sentences[2] ?? item.title, MAX_LINE_CHARS),
+  const bullets: string[] = [
+    truncate(sentences[0] ?? item.title, MAX_LINE_CHARS_SRC),
+    truncate(sentences[1] ?? item.title, MAX_LINE_CHARS_SRC),
+    truncate(sentences[2] ?? item.title, MAX_LINE_CHARS_SRC),
   ];
   const game = item.appId !== undefined ? meta?.get(item.appId) : undefined;
   return {
     id: item.id,
     title: item.title,
-    titleKo: item.title,
     url: item.url,
     appId: item.appId,
     gameName: game?.name,
     platforms: game?.platforms ?? [],
     sourceName: item.sourceName,
     imageUrl: item.imageUrl,
-    bulletsKo: bullets,
-    insightKo: truncate(
-      `${item.title} 관련 소식이므로 원문에서 세부 내용을 확인하세요.`,
-      MAX_LINE_CHARS,
-    ),
-    translated: false,
+    bullets,
     sourceLang: detectSourceLang(item),
+    translated: false,
   };
 }
 
 function parseLlmPayload(
   raw: string,
   item: ScoredItem,
-  translated: boolean,
   meta?: Map<number, GameMeta>,
 ): Summary {
   const sourceLang = detectSourceLang(item);
   const game = item.appId !== undefined ? meta?.get(item.appId) : undefined;
-  const finish = (bullets: string[], insight: string, titleKo: string): Summary => ({
+  const finish = (bullets: string[]): Summary => ({
     id: item.id,
     title: item.title,
-    titleKo: truncate(titleKo || item.title, MAX_LINE_CHARS),
     url: item.url,
     appId: item.appId,
     gameName: game?.name,
     platforms: game?.platforms ?? [],
     sourceName: item.sourceName,
     imageUrl: item.imageUrl,
-    bulletsKo: [
-      truncate(bullets[0] ?? item.title, MAX_LINE_CHARS),
-      truncate(bullets[1] ?? item.title, MAX_LINE_CHARS),
-      truncate(bullets[2] ?? item.title, MAX_LINE_CHARS),
-    ],
-    insightKo: truncate(insight || `${item.title} 관련 소식이므로 원문을 확인하세요.`, MAX_LINE_CHARS),
-    translated,
+    // 2~3개로 정규화한다. 모자라면 제목으로 메운다.
+    bullets: [bullets[0], bullets[1], bullets[2]]
+      .map((b) => truncate(b ?? item.title, MAX_LINE_CHARS_SRC))
+      .slice(0, Math.max(2, Math.min(3, bullets.length || 2))),
     sourceLang,
+    // 번역이 아니다. Ko는 translate 노드 담당.
+    translated: false,
   });
 
   try {
-    const parsed = JSON.parse(raw) as { bullets?: unknown; insight?: unknown; titleKo?: unknown };
-    if (Array.isArray(parsed.bullets) && typeof parsed.insight === "string") {
-      const bullets = parsed.bullets.filter((b): b is string => typeof b === "string");
-      const titleKo = typeof parsed.titleKo === "string" && parsed.titleKo.trim() ? parsed.titleKo : item.title;
-      if (bullets.length > 0) return finish(bullets, parsed.insight, titleKo);
+    const parsed = JSON.parse(raw) as { bullets?: unknown };
+    if (Array.isArray(parsed.bullets)) {
+      const bullets = parsed.bullets.filter((b): b is string => typeof b === "string" && b.trim().length > 0);
+      if (bullets.length >= 2 && bullets.length <= 3) return finish(bullets);
     }
   } catch {
     // JSON이 아니면 줄 단위 파싱으로 넘어간다.
@@ -111,13 +108,13 @@ function parseLlmPayload(
     .split("\n")
     .map((l) => l.replace(/^[-*\d.)\s]+/, "").trim())
     .filter((l) => l.length > 0);
-  return finish(
-    lines.slice(0, 3),
-    lines.slice(3).join(" "),
-    item.title,
-  );
+  return finish(lines.slice(0, 3));
 }
 
+/**
+ * 원어 요약. 영어 원문이면 영어로 2~3줄, 한국어 원문이면 한국어로.
+ * 번역(titleKo/bulletsKo)은 여기서 만들지 않는다.
+ */
 async function summarizeWithLlm(
   client: OpenAI,
   model: string,
@@ -127,52 +124,58 @@ async function summarizeWithLlm(
 ): Promise<Summary> {
   const content = item.content.slice(0, MAX_CONTENT_CHARS);
   const task = isKoreanSource
-    ? "원문이 한국어이므로 한국어로 3줄 요약하고, insight도 한국어로 1줄 작성하라."
-    : "원문이 외국어이므로 한국어로 3줄 요약하고, 독자 관점 인사이트를 한국어로 1줄 작성하라.";
+    ? "The source is Korean. Summarize in Korean: 2-3 bullet lines."
+    : "The source is English. Summarize in English: 2-3 bullet lines. Do NOT translate to Korean.";
   const response = await client.chat.completions.create({
     model,
     messages: [
       {
         role: "system",
         content:
-          "너는 게임 뉴스를 한국어로 요약하는 어시스턴트다. " +
-          "반드시 JSON으로만 답한다: {\"bullets\": [요약 3개], \"insight\": \"인사이트 1줄\", \"titleKo\": \"제목 한국어 번역 (원제와 같으면 그대로)\"}. " +
-          "각 항목은 200자 이하. 아래 원문 URL·제목·appId에 해당하는 게임에만 근거해 작성하고 다른 게임을 언급하지 않는다.",
+          "You summarize game news in the source language. " +
+          "Reply with JSON only: {\"bullets\": [2-3 summary lines]}. " +
+          "Each item max 300 chars. Base strictly on the given article (title, appId game, URL, body). " +
+          "Do not mention other games. Do not invent dates, numbers, or events not in the article.",
       },
       {
         role: "user",
         content: [
-          `제목: ${item.title}`,
-          `appId: ${item.appId ?? "없음"}`,
-          `원문 URL: ${item.url}`,
+          `Title: ${item.title}`,
+          `appId: ${item.appId ?? "none"}`,
+          `Source URL: ${item.url}`,
           task,
-          "원문:",
+          "Article:",
           content,
         ].join("\n"),
       },
     ],
   });
   const raw = response.choices[0]?.message?.content ?? "";
-  return parseLlmPayload(raw, item, !isKoreanSource, meta);
+  return parseLlmPayload(extractJsonPayload(raw), item, meta);
 }
+
+export type SummarizeProgress = (done: number, total: number, title: string) => void;
 
 export async function summarizeItems(
   items: ScoredItem[],
   opts: SummarizeOptions,
   meta?: Map<number, GameMeta>,
+  onProgress?: SummarizeProgress,
 ): Promise<Summary[]> {
-  if (!opts.apiKey) {
+  if (!canCallLlm(opts.baseURL, opts.apiKey)) {
     return items.map((item) => fallbackSummary(item, meta));
   }
-  const client = new OpenAI({ baseURL: opts.baseURL, apiKey: opts.apiKey });
+  const client = new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey) });
   const results: Summary[] = [];
-  for (const item of items) {
+  for (const [i, item] of items.entries()) {
     try {
       const isKoreanSource = hasKorean(`${item.title}\n${item.content}`);
       results.push(await summarizeWithLlm(client, opts.model, item, isKoreanSource, meta));
-    } catch {
+    } catch (err) {
+      warnFallback("summarize", err);
       results.push(fallbackSummary(item, meta));
     }
+    onProgress?.(i + 1, items.length, item.title);
   }
   return results;
 }

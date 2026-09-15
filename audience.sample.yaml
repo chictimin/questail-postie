@@ -1,0 +1,55 @@
+# audience.sample.yaml — 저장소 커밋용 샘플.
+# 처음 클론했으면 이 파일을 audience.yaml로 복사한 뒤 값을 고친다.
+# audience.yaml은 개인 설정이라 깃 추적 제외다.
+# 라이브러리·위시리스트 appId는 적지 않는다.
+# 런타임에 전역 ~/.config/questail/.env의 STEAM_ID로 자동 확정한다.
+
+# 대상 플랫폼 목록 (예: PC)
+platforms:
+  - PC
+# 관심 장르 목록
+genres:
+  - RPG
+  - 인디
+# 제목에 포함되면 예선에서 탈락하는 키워드 목록
+exclude:
+  - e스포츠
+# 소스 가중치 (피드 URL 부분 문자열 매칭, 가장 긴 키 우선, 없으면 default)
+source_weights:
+  default: 1.0
+  "reddit.com/r/Games": 1.2
+  "reddit.com/r/indiegames": 0.3
+  "reddit.com/r/GameDeals": 0.5
+  "pcgamer.com": 2.0
+  "vg247.com": 1.8
+  "pcgamesn.com": 1.6
+  "gamesindustry.biz": 1.8
+  "rpgsite.net": 1.4
+# 선별 가중치 (숫자가 클수록 우선)
+weights:
+  library_match: 3 # 보유 게임 appId 일치 가산
+  wishlist_match: 2 # 위시리스트 appId 일치 가산
+  recency_hours: 72 # 이 시간 이내 발행이면 최신 가산
+# 개수 상한
+batch:
+  pool: 30 # 예선 통과 상한
+  shortlist: 10 # 중간 후보 상한
+  final: 5
+  extra: 3
+  sale: 5
+output:
+  show_game_line: true
+# 앱당 Steam 뉴스 수집 수
+steam_news_count: 5
+# 수집할 Reddit RSS 목록
+reddit_feeds:
+  - https://www.reddit.com/r/Games/new/.rss
+  - https://www.reddit.com/r/indiegames/new/.rss
+  - https://www.reddit.com/r/GameDeals/new/.rss
+# 수집할 게임 언론 RSS 목록
+press_feeds:
+  - https://www.pcgamer.com/rss/
+  - https://www.vg247.com/feed
+  - https://www.pcgamesn.com/mainrss.xml
+  - https://www.gamesindustry.biz/feed
+  - https://www.rpgsite.net/feed/

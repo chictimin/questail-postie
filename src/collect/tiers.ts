@@ -12,12 +12,14 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { collectSteamNews, fetchAppMeta } from "./steam.js";
-import { fetchRecentlyPlayedAppIds, fetchWishlistAppIds } from "../steamid.js";
-import type { Audience, NewsItem } from "../types.js";
+import { fetchOwnedGamesDetail, fetchWishlistAppIds } from "../steamid.js";
+import type { NewsItem } from "../types.js";
 
 export const TIER0_NEWS_COUNT = 5;
 export const TIER1_NEWS_COUNT = 3;
 export const TIER1_RECENT_DAYS = 30;
+/** 라이브러리 상한 — 최근 플레이 순 상위 N개만. fetchAppMeta 폭증(429) 방지. */
+export const TIER1_MAX_APPS = 15;
 export const SALE_DISCOUNT_MIN_PERCENT = 20;
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -25,55 +27,81 @@ const FETCH_TIMEOUT_MS = 15_000;
 export interface TierSet {
   wishlistAppIds: number[];
   recentAppIds: number[];
-  /** 티어 출처: steam API로 확정 / audience.yaml 폴백 */
+  /** personalize용 라이브러리 — 최근 플레이, 비면 보유 전체 */
+  libraryAppIds: number[];
+  /** 티어 출처: steam API로 확정 / 키 없음 */
   steamSource: "steam" | "audience";
 }
 
-/** STEAM 키 읽기 전용으로 티어 확정. 질문 없이 폴백한다. */
-export async function resolveTiers(aud: Audience): Promise<TierSet> {
+/**
+ * STEAM 키 읽기 전용으로 티어 확정. 질문 없이 진행한다.
+ * - 키·SteamID 없음 → 전부 빈 배열. Steam 수집 0건이어도 RSS만으로 계속 돈다.
+ * - 키 있음 → 위시 전수(IWishlistService) + 최근 플레이(rtime_last_played 30일).
+ *   최근 플레이가 비면 보유 전체를 라이브러리로 쓴다.
+ */
+export async function resolveTiers(): Promise<TierSet> {
   const apiKey = process.env.STEAM_API_KEY || "";
   const steamId = process.env.STEAM_ID || "";
-  if (!apiKey || !steamId) {
-    return {
-      wishlistAppIds: [...aud.wishlist_appids],
-      recentAppIds: [],
-      steamSource: "audience",
-    };
-  }
-  const [wishlist, recent] = await Promise.all([
+  const empty: TierSet = {
+    wishlistAppIds: [],
+    recentAppIds: [],
+    libraryAppIds: [],
+    steamSource: "audience",
+  };
+  if (!apiKey || !steamId) return empty;
+  const [wishlist, owned] = await Promise.all([
     fetchWishlistAppIds(apiKey, steamId).catch(() => [] as number[]),
-    fetchRecentlyPlayedAppIds(apiKey, steamId, TIER1_RECENT_DAYS).catch(() => [] as number[]),
+    fetchOwnedGamesDetail(apiKey, steamId).catch(
+      () => [] as Array<{ appid: number; rtimeLastPlayed: number }>,
+    ),
   ]);
+  const cutoff = Math.floor(Date.now() / 1000) - TIER1_RECENT_DAYS * 86400;
+  // 최근 플레이 순으로 정렬 후 상한을 건다. GetOwnedGames 2회 호출을 피하려고
+  // fetchRecentlyPlayedAppIds를 쓰지 않고 이미 받아온 owned에서 직접 자른다.
+  const byRecent = [...owned].sort((a, b) => b.rtimeLastPlayed - a.rtimeLastPlayed);
+  const recent = [...new Set(byRecent.filter((g) => g.rtimeLastPlayed >= cutoff).map((g) => g.appid))].slice(
+    0,
+    TIER1_MAX_APPS,
+  );
+  // 폴백(최근 플레이 없음)도 15개로 제한 — 보유 전체(120종) fetchAppMeta 폭증 방지.
+  const ownedIds = [...new Set(byRecent.map((g) => g.appid))].slice(0, TIER1_MAX_APPS);
   return {
-    // 위시리스트 API 제거 상태(404)라 빈 결과면 설정 전수를 쓴다.
-    wishlistAppIds: wishlist.length > 0 ? [...new Set(wishlist)] : [...aud.wishlist_appids],
-    recentAppIds: [...new Set(recent)],
+    wishlistAppIds: [...new Set(wishlist)],
+    recentAppIds: recent,
+    libraryAppIds: recent.length > 0 ? recent : ownedIds,
     steamSource: "steam",
   };
 }
 
-// ─── 증분 seen.json ─────────────────────────────────────────────
+// ─── 발행분 seen.json ─────────────────────────────────────────────
+// "앱별 커서"가 아니라 "발행된 항목 id 집합"이다. 수집분 전체의 커서를 전진시키면
+// 미발행 항목이 영영 후보에서 사라지므로(fresh=0 사고), 발행된 id만 기록한다.
 
-export interface SeenEntry {
-  lastGid: string;
-  lastDate: number;
-}
+/** 보존 기간(일). saveSeen 시점에 이보다 오래된 발행 기록을 정리한다 (유효기간). */
+export const SEEN_RETENTION_DAYS = 30;
 
 export interface SeenStore {
-  apps: Record<string, SeenEntry>;
+  /** 발행된 항목 id → 발행 시각(unix sec) */
+  published: Record<string, number>;
 }
 
 export function emptySeen(): SeenStore {
-  return { apps: {} };
+  return { published: {} };
 }
 
 export async function loadSeen(seenPath: string): Promise<SeenStore> {
   if (!existsSync(seenPath)) return emptySeen();
   try {
     const raw = await readFile(seenPath, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<SeenStore>;
+    const parsed = JSON.parse(raw) as Partial<SeenStore> & { apps?: unknown };
+    if (parsed && typeof parsed.published === "object" && parsed.published !== null) {
+      return { published: parsed.published as Record<string, number> };
+    }
     if (parsed && typeof parsed.apps === "object" && parsed.apps !== null) {
-      return { apps: parsed.apps as Record<string, SeenEntry> };
+      // 구 형식 {"apps": {...}} — 커서와 id 집합은 정보가 달라 정확한 변환이 불가능하다.
+      // 변환하지 않고 빈 집합으로 시작한다.
+      console.error("[seen] 구 형식 seen.json(apps 커서)을 발견 — published 빈 집합으로 시작합니다");
+      return emptySeen();
     }
   } catch {
     // 파싱 실패 시 빈 저장소로 시작 (덮어쓰지 않고 메모리에만 유지)
@@ -81,51 +109,30 @@ export async function loadSeen(seenPath: string): Promise<SeenStore> {
   return emptySeen();
 }
 
+function pruneSeen(seen: SeenStore, nowSec: number): void {
+  const cutoff = nowSec - SEEN_RETENTION_DAYS * 24 * 3600;
+  for (const [id, ts] of Object.entries(seen.published)) {
+    if (typeof ts !== "number" || ts < cutoff) delete seen.published[id];
+  }
+}
+
 export async function saveSeen(seenPath: string, seen: SeenStore): Promise<void> {
+  pruneSeen(seen, Math.floor(Date.now() / 1000));
   await mkdir(dirname(seenPath), { recursive: true });
   await writeFile(seenPath, `${JSON.stringify(seen, null, 2)}\n`, "utf-8");
 }
 
-/** steam-{appId}-{gid}에서 appId·gid 분리 */
-export function parseSteamId(id: string): { appId: number; gid: string } | null {
-  if (!id.startsWith("steam-")) return null;
-  const rest = id.slice("steam-".length);
-  const dash = rest.indexOf("-");
-  if (dash === -1) return null;
-  const appId = Number(rest.slice(0, dash));
-  const gid = rest.slice(dash + 1);
-  if (!Number.isInteger(appId) || !gid) return null;
-  return { appId, gid };
-}
-
-/** 저장된 (lastDate, lastGid) 이후 항목만 통과 */
+/** published에 id가 있으면 제외. 미발행 수집분은 다음 런에 다시 후보가 된다. */
 export function filterUnseenSteam(items: NewsItem[], seen: SeenStore): NewsItem[] {
-  return items.filter((item) => {
-    const parsed = parseSteamId(item.id);
-    if (!parsed) return true;
-    const entry = seen.apps[String(parsed.appId)];
-    if (!entry) return true;
-    if (item.publishedAt > entry.lastDate) return true;
-    if (item.publishedAt === entry.lastDate && parsed.gid > entry.lastGid) return true;
-    return false;
-  });
+  return items.filter((item) => !Object.prototype.hasOwnProperty.call(seen.published, item.id));
 }
 
-/** 수집분 전체에서 앱별 최대 (date, gid)로 커서 전진 */
-export function updateSeen(seen: SeenStore, items: NewsItem[]): void {
-  for (const item of items) {
-    const parsed = parseSteamId(item.id);
-    if (!parsed) continue;
-    const key = String(parsed.appId);
-    const prev = seen.apps[key];
-    if (
-      !prev ||
-      item.publishedAt > prev.lastDate ||
-      (item.publishedAt === prev.lastDate && parsed.gid > prev.lastGid)
-    ) {
-      seen.apps[key] = { lastGid: parsed.gid, lastDate: item.publishedAt };
-    }
-  }
+/**
+ * 발행된 항목 id만 기록한다. 수집분 전체를 넣지 말 것 —
+ * 넣으면 미발행 항목이 다음 런 후보에서 사라진다.
+ */
+export function updateSeen(seen: SeenStore, ids: string[], nowSec: number = Math.floor(Date.now() / 1000)): void {
+  for (const id of ids) seen.published[id] = nowSec;
 }
 
 // ─── 티어 뉴스 수집 ─────────────────────────────────────────────
@@ -209,6 +216,12 @@ export async function collectSaleWatch(
       author: "",
       content: `${name}이(가) Steam에서 ${pct}% 할인 중이다. ${priceLine}`.trim(),
       lang: "ko",
+      sale: {
+        gameName: name,
+        percent: pct,
+        priceInitial: price?.initial_formatted,
+        priceFinal: price?.final_formatted,
+      },
     });
   }
   return out;
