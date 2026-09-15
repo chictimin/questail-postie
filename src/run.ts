@@ -1,8 +1,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { config as loadDotenv } from "dotenv";
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
+import { initEnv } from "./globalConfig.js";
 import { runPipeline } from "./graph.js";
 import { collectSteamNews, fetchAppMeta } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
@@ -62,7 +62,7 @@ async function dryRun(aud: Audience): Promise<void> {
 
 async function main(): Promise<void> {
   const { dryRun: isDryRun } = parseArgs(process.argv.slice(2));
-  loadDotenv({ path: resolve(ROOT, ".env") });
+  initEnv(resolve(ROOT, ".env"));
 
   const hasKey = Boolean(process.env.OPENAI_API_KEY);
   const hasWebhook = Boolean(process.env.DISCORD_WEBHOOK_URL);

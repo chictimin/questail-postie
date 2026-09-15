@@ -10,9 +10,10 @@
  */
 
 import { readFile, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { initEnv, saveSteamKeys } from "./globalConfig.js";
 import { fetchOwnedAppIds, resolveToSteamId } from "./steamid.js";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
@@ -294,21 +295,7 @@ async function chooseModel(
   return textInput(ks, "모델명", fallbackDefault);
 }
 
-// ─── env 저장 ───────────────────────────────────────────────────
-
-function loadEnvFile(filepath: string): void {
-  if (!existsSync(filepath)) return;
-  const content = readFileSync(filepath, "utf-8");
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim();
-    if (!process.env[key]) process.env[key] = val;
-  }
-}
+// ─── env 저장 (로컬 .env 전용 — 전역 파일에는 쓰지 않는다) ───
 
 async function saveEnv(entries: Record<string, string>): Promise<void> {
   let lines: string[] = [];
@@ -358,7 +345,7 @@ export function patchAudienceYaml(
 // ─── 메인 ───────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  loadEnvFile(ENV_FILE);
+  initEnv(ENV_FILE);
   const ks = createKeyStream();
 
   header("BYOK 설정");
@@ -405,6 +392,7 @@ async function main(): Promise<void> {
   header("Steam 연동");
   let steamKey = process.env.STEAM_API_KEY || "";
   let steamId64 = process.env.STEAM_ID || "";
+  process.stdout.write(`현재 키: ${steamKey ? "전역 설정에 등록됨" : "(미등록)"}\n`);
   const steamInput = await textInput(
     ks,
     "Steam 프로필 (URL·ID·vanity, Enter=건너뛰기)",
@@ -419,7 +407,8 @@ async function main(): Promise<void> {
         steamId64 = await resolveToSteamId(steamInput, steamKey);
         const owned = await fetchOwnedAppIds(steamKey, steamId64);
         libraryAppIds = [...new Set(owned)];
-        process.stdout.write(`Steam 보유 ${owned.length}건을 라이브러리에 반영합니다.\n`);
+        await saveSteamKeys({ STEAM_API_KEY: steamKey, STEAM_ID: steamId64 });
+        process.stdout.write(`Steam 보유 ${owned.length}건을 라이브러리에 반영하고 키를 전역 설정에 저장했습니다.\n`);
       } catch (err) {
         process.stdout.write(`Steam 연동 실패: ${err instanceof Error ? err.message : String(err)}\n수동 입력값을 유지합니다.\n`);
       }
@@ -454,8 +443,6 @@ async function main(): Promise<void> {
     OPENAI_API_KEY: provider === 2 ? "" : apiKey,
     MODEL: model,
     DISCORD_WEBHOOK_URL: finalWebhook,
-    STEAM_API_KEY: steamKey,
-    STEAM_ID: steamId64,
   });
   await writeFile(
     AUDIENCE_FILE,
