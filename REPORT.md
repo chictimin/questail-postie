@@ -60,7 +60,8 @@ VG247 약2.3M · Siliconera 1.52M · Shacknews 1.19M (Semrush 2026-06/07, Simila
   최신순 정렬 → `batch.pool: 30`건으로 절단.
 - 본선 rank (`src/select.ts` `rankFinal`): 점수 = appId 일치 시 전부 가산
   (library `weights.library_match: 3.0` / wishlist `weights.wishlist_match: 2.0`),
-  제목 일치 시 절반 가산(`titleMatch: 1.5`, 라이브러리/위시리스트 각각 최대 1회),
+  제목 일치 시 절반 가산(`titleMatch: 1.5` — `audience.yaml`이 아니라 `src/personalize.ts` 하드코딩,
+  라이브러리/위시리스트 각각 최대 1회),
   발행이 `recency_hours: 72` 이내면 최신 가산 +1.0. labels는
   `library`/`wishlist`/`library-title`/`wishlist-title`/`recent` 중 해당 항목을 부여하고,
   어느 조건에도 해당하지 않으면 기본 라벨 1개를 부여한다.
@@ -88,7 +89,7 @@ OK check:select
 
 ```mermaid
 graph LR
-    START --> collect --> personalize --> filter --> rank --> summarize --> verify --> publish --> END
+    START --> collect --> personalize --> filter --> rank --> summarize --> verify --> briefing --> publish --> END
 ```
 
 - collect: `collectSteamNews`(library+위시리스트 appId, 앱당 5건) + `collectRss`(reddit+press, pool 상한) 병렬,
@@ -98,22 +99,28 @@ graph LR
 - rank: 30건 → 최종 5건 (labels 기록).
 - summarize: `summarizeItems` — OpenAI 호환 엔드포인트(`OPENAI_BASE_URL`·`OPENAI_API_KEY`·`MODEL`은
   `run.ts`가 `.env`에서 읽어 인자로 전달). 외국어 원문은 한국어 3줄 요약+인사이트 1줄(`translated: true`),
-  한국어 원문은 3줄 요약(`translated: false`). 키가 비면 3문장 절취 폴백으로 파이프라인 계속.
+  한국어 원문도 3줄 요약+인사이트 1줄을 생성하되 `translated: false`로 둔다.
+  키가 비면 3문장 절취 폴백으로 파이프라인 계속.
   플랫폼·게임명 표기: `fetchAppMeta`가 Store API `platforms`에서 Windows/macOS/Linux를 추출하고
   (`src/collect/steam.ts`), `graph.ts`가 이 메타 맵을 `summarizeItems`에 전달해
   `Summary`에 `gameName`·`platforms`·`sourceName`을 기록한다(폴백·LLM 경로 공통).
   출처 표기: Steam 수집분은 `sourceName: "Steam 공지"`, RSS 수집분은 피드 title(60자 절취)을 `sourceName`으로 둔다.
 - verify: `verifySummaries` — 검사 3종(제목 핵심 토큰 포함 / url http+원문 매핑 / 각 200자 이하),
   실패 시 `resummarize` 1회 재생성 후 재검사, 그래도 실패하면 스킵+verdict 기록.
-- publish: `publishAll` — 항상 `output/latest.md` 저장, `DISCORD_WEBHOOK_URL`이 있으면 웹훅 전송(2000자 분할).
-  md에는 항목마다 게임명·플랫폼 행(`게임: {이름} · {플랫폼/…}`, gameName 없으면 `플랫폼 미상` — RSS분은 appId가 없어
-  이 행이 된다)과 출처 행(`- 출처: {사이트} · [원문](url)`)을 둔다.
+- briefing: `buildDigest` (`src/digest.ts`) — 선별 풀(`filtered`, 최대 30건)의 제목 목록을 보고
+  한국어 3줄 이내 브리핑(`많이 나온 주제`, `가장 주목받은 소식 1건과 그 이유`, 각 200자 이하).
+  키가 비거나 실패하면 빈 배열이라 섹션이 생략된다. metrics stage `digest`(예: count=1, pool=30).
+  md 상단 `## 오늘의 분위기` 섹션과 Discord 선두 블록(`**오늘의 분위기**`)에 들어간다.
+- publish: `publishAll(summaries, opts, digest)` — 항상 `output/latest.md` 저장,
+  `DISCORD_WEBHOOK_URL`이 있으면 항목별 페이로드 전송. 2000자 초과 페이로드는 스킵한다(`continue`).
+  md에는 항목마다 게임명 행(`게임: {이름} · {플랫폼/…}`, gameName 없으면 행 생략 — RSS분은 appId가 없어 생략)과
+  출처 행(`- 출처: {사이트} · [원문](url)`)을 둔다.
   Discord 전송문은 `[출처: {사이트}](<url>)` 형식으로, URL을 `<>`로 감싸 임베드 미리보기를 억제한다.
 - 기록: 각 노드가 `MetricRecord`를 `store/metrics.jsonl`에 append (`src/run.ts`).
 
 ## 5. 실행 기록
 
-`store/metrics.jsonl` 최신 런 실측 (2026-09-15T03:12, 전 구간):
+`store/metrics.jsonl` 최신 런 실측 (2026-09-15T03:41, 전 구간):
 
 | stage | count | detail |
 | --- | --- | --- |
@@ -121,19 +128,21 @@ graph LR
 | personalize | 3 | library=2 wishlist=1 |
 | filter | 30 | pool=45 |
 | rank | 5 | labels=recent×5 (해당 런은 최신 가산 5건) |
-| summarize | 5 | translated=5 (03:12:29→03:12:38, 약 9초) |
+| summarize | 5 | translated=5 (03:41:25→03:41:33, 약 8초) |
 | verify | 5 | 5 pass (재생성 0건) |
+| digest | 1 | pool=30 |
 | publish | 5 | delivered=true |
 
 - collect 45(steam15+rss30) → personalize → filter 30 → rank 5 →
-  summarize translated 5/5(약 9초) → verify 5 pass → publish delivered=true.
+  summarize translated 5/5(약 8초) → verify 5 pass → digest 1줄 → publish delivered=true.
 - `output/latest.md`: 선정 5건 한국어 요약 저장 확인
-  (Aniimo·Arc Raiders·Kingmakers·Wardogs·Level-5 AI 쇼케이스,
-  제목+3줄 요약+인사이트+게임·플랫폼+출처+원문 링크 형식.
-  현행 파일 기준 5건 모두 RSS분이라 게임 행은 `플랫폼 미상`,
-  출처 행은 `출처: newest submissions : indiegames · [원문](…)` /
+  (JUJUTSU KAISEN RUMBLE·Persona 5: The Phantom X·Aniimo·Another Eden Begins·Arc Raiders,
+  `## 오늘의 분위기` 1줄 + 항목별 제목+3줄 요약+인사이트+출처+원문 링크 형식.
+  현행 파일 기준 5건 모두 RSS분이라 게임 행은 생략,
+  출처 행은 `출처: newest submissions : Games · [원문](…)` /
   `출처: PCGamer latest · [원문](…)` 형태).
-- Discord 실전송 확인됨 (해당 런 `delivered=true`).
+- 주의: `output/latest.md`는 매 실행마다 덮어쓴다. 위 인용은 열람 시점 파일 기준이며 후속 런에 덮어씌워질 수 있다.
+- Discord: 해당 런 `delivered=true`(metrics 기록). 단 실제 Discord 화면 캡처는 미확인으로 둔다.
 - 참고: 직전 런들은 `translated=0`(폴백)·`delivered=false`(웹훅 미설정) 상태였으며,
   파일 저장(`output/latest.md`)은 항상 수행.
 

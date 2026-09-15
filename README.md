@@ -15,11 +15,13 @@ pnpm start
 
 ## 구조
 
-- `src/graph.ts` — LangGraph 워크플로우 (collect → filter → rank → summarize → verify → publish)
+- `src/graph.ts` — LangGraph 워크플로우 (collect → personalize → filter → rank → summarize → verify → briefing → publish)
 - `src/run.ts` — 실행 스크립트
 - `src/collect/` — 수집 (Steam AppNews 공개 API + RSS)
+- `src/personalize.ts` — 게임명 인덱스 구축 (한글명 포함)
 - `src/select.ts` — 예선/본선 2단계 선별
 - `src/summarize.ts` — LLM 한국어 요약·번역
+- `src/digest.ts` — 오늘의 분위기 브리핑
 - `src/verify.ts` — 자동 검수 및 예외 처리
 - `src/publish.ts` — 디스코드 웹훅 + md 백업
 - `audience.yaml` — 독자·가중치·제외조건 설정
