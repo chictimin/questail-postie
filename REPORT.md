@@ -459,6 +459,7 @@ OK check-tiers
 (없으면 폴백 요약 + 파일 저장만 수행하고 멈추지 않는다).
 
 macOS `launchd` (권장): `~/Library/LaunchAgents/com.questail.postie.plist`
+`/path/to/questail-postie`는 저장소를 클론한 실제 경로로 바꾼다.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -471,10 +472,10 @@ macOS `launchd` (권장): `~/Library/LaunchAgents/com.questail.postie.plist`
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd /Users/mjolnir/Desktop/aiffel/questail-postie && pnpm start</string>
+    <string>cd /path/to/questail-postie && pnpm start</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/mjolnir/Desktop/aiffel/questail-postie</string>
+  <string>/path/to/questail-postie</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
@@ -483,22 +484,22 @@ macOS `launchd` (권장): `~/Library/LaunchAgents/com.questail.postie.plist`
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/mjolnir/Desktop/aiffel/questail-postie/store/scheduler.log</string>
+  <string>/path/to/questail-postie/store/scheduler.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/mjolnir/Desktop/aiffel/questail-postie/store/scheduler.err.log</string>
+  <string>/path/to/questail-postie/store/scheduler.err.log</string>
 </dict>
 </plist>
 ```
 
 등록: `launchctl load ~/Library/LaunchAgents/com.questail.postie.plist`.
 `zsh -lc`는 로그인 셸 PATH에서 pnpm을 찾는다.
-(실측 경로 `/Users/mjolnir/Library/pnpm/pnpm`)
 PATH에 없으면 `pnpm start`를 절대경로로 교체한다.
+절대경로는 `which pnpm`으로 확인한다 (예: `~/Library/pnpm/pnpm`).
 
 크론 대안 (매일 07:00):
 
 ```sh
-0 7 * * * cd /Users/mjolnir/Desktop/aiffel/questail-postie && /Users/mjolnir/Library/pnpm/pnpm start >> store/scheduler.log 2>&1
+0 7 * * * cd /path/to/questail-postie && $(which pnpm) start >> store/scheduler.log 2>&1
 ```
 
 ## 6. 프로젝트 회고
@@ -559,7 +560,8 @@ PATH에 없으면 `pnpm start`를 절대경로로 교체한다.
 
 ### questail 본 프로젝트로의 흡수 검토
 
-이 실습은 별도 저장소로 시작했지만, 본 프로젝트 `questail`(`~/Desktop/code/questail`)에
+이 실습은 별도 저장소로 시작했지만, 본 프로젝트
+[questail](https://github.com/chictimin/questail)에
 기능을 흡수하는 방향을 검토 중이다. 현재 확인된 접점과 조정 지점을 남겨둔다.
 
 **이미 공유하는 것**
