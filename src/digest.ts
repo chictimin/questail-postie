@@ -24,7 +24,7 @@ function parseParagraph(raw: string): string {
 }
 
 /**
- * 원어 브리핑 (평문 한 문단). 제목 목록 언어로 2~4문장, 읽는 사람에게 말하듯.
+ * 원어 브리핑 (평문 한 문단). 제목 목록 언어로 2~3문장, 읽는 사람에게 말하듯.
  * 한국어 번역은 translate 노드 담당 — textKo는 여기서 채우지 않는다.
  */
 export async function buildDigest(
@@ -46,9 +46,13 @@ export async function buildDigest(
           content:
             "You glance over game news headlines and explain them to the reader in plain prose. " +
             "The reader is a heavy gamer who does not want to miss news about their own Steam library and wishlist games. " +
+            "Do not cover every headline — focus on the 1-2 most important stories and mention the rest only as background flow, or omit them. " +
+            "The number of sentences must not grow with the number of headlines. " +
             "Do not just list what happened — make each sentence show what matters to this reader and why, and what they should pay attention to or follow up on. " +
-            "Reply in the language of the headlines, one paragraph of 2-4 sentences. " +
-            "No line breaks, no numbers, no bullets. Do not invent facts.",
+            "Start directly with the news itself, never with words referring to this briefing (e.g. headline/introduction/this article/today's briefing). " +
+            "Reply in the language of the headlines, one paragraph of 2-3 sentences. " +
+            "No line breaks, no numbers, no bullets. No markdown emphasis of any kind (no asterisks, underscores, or backticks) — write game names as plain text. " +
+            "Do not invent facts.",
         },
         { role: "user", content: list },
       ],

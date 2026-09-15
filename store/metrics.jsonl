@@ -196,3 +196,12 @@
 {"ts":"2026-09-15T06:29:17.222Z","stage":"digest","count":1,"detail":"chars=588 pool=30"}
 {"ts":"2026-09-15T06:33:02.093Z","stage":"translate","count":5,"detail":"ok=5 ko=0 failed=0 skipped=0 sourceKo=0"}
 {"ts":"2026-09-15T06:33:02.897Z","stage":"publish","count":5,"detail":"delivered=true parts=2 sale=5"}
+{"ts":"2026-09-15T06:53:33.437Z","stage":"collect","count":295,"detail":"steam=265(fresh=256 sale=9) rss=30 tier0=241 tier1=15 tiers=steam"}
+{"ts":"2026-09-15T06:53:33.441Z","stage":"personalize","count":55,"detail":"library=5 wishlist=51 noMeta=0"}
+{"ts":"2026-09-15T06:53:33.447Z","stage":"filter","count":58,"detail":"pool=295 personal=30 general=28 sale=5"}
+{"ts":"2026-09-15T06:53:33.458Z","stage":"rank","count":8,"detail":"personal=5 labels=wishlist+wishlist-title+recent+source:community,wishlist+wishlist-title+recent+source:community,library+library-title+source:community,library+library-title+source:community,library+recent+source:community extra=3 labels=recent+source:press,recent+source:press,recent+source:press"}
+{"ts":"2026-09-15T06:53:46.178Z","stage":"summarize","count":8,"detail":"sourceKo=0"}
+{"ts":"2026-09-15T06:53:46.185Z","stage":"verify","count":8,"detail":"steam-2949320-1843481262703465:pass steam-3041230-1843481262702197:pass steam-3453910-1843481262692971:pass steam-4174310-1842846814452129:pass steam-3453910-1843481262702004:pass rss-6bf36afcac72141a:pass rss-f5bce81410cdf7c2:pass rss-9fa0e54b6611af69:pass"}
+{"ts":"2026-09-15T06:53:47.492Z","stage":"digest","count":1,"detail":"chars=553 pool=58"}
+{"ts":"2026-09-15T06:54:00.723Z","stage":"translate","count":8,"detail":"ok=8 ko=0 failed=0 skipped=0 sourceKo=0"}
+{"ts":"2026-09-15T06:54:01.652Z","stage":"publish","count":8,"detail":"delivered=true parts=2 sale=5 seen=8ids"}

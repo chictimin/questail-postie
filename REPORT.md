@@ -65,7 +65,7 @@ VG247 약2.3M · Siliconera 1.52M · Shacknews 1.19M (Semrush 2026-06/07, Simila
 ### 실제 파이프라인 사용 (런타임 확정 기준)
 
 - Tier0(위시 전수×5) + Tier1(최근 30일×3) + 할인 감시(20%+, `steam-sale` 합성) +
-  seen.json 증분(Steam만, RSS 제외) + RSS 그대로(Reddit 3종 — 429 시 해당 피드 0건으로 수집 계속 + 언론 5종).
+  seen.json 증분(발행분 id만 기록. Steam 수집분 대상, RSS·할인 제외) + RSS 그대로(Reddit 3종 — 429 시 해당 피드 0건으로 수집 계속 + 언론 5종).
 - 위시리스트는 `IWishlistService/GetWishlist/v1/`로 전수 조회한다 (`src/steamid.ts`).
   예전 엔드포인트명(`IStoreService/GetWishlist/v1/`)으로 호출하면 404가 나지만, 올바른 이름으로는 정상 동작하며
   실측 51건이다 (`pnpm check:tiers` live `wishlist=51`). appId 수기 관리는 없어졌다 —
@@ -94,9 +94,17 @@ VG247 약2.3M · Siliconera 1.52M · Shacknews 1.19M (Semrush 2026-06/07, Simila
   (library `weights.library_match: 3.0` / wishlist `weights.wishlist_match: 2.0`),
   제목 일치 시 절반 가산(`titleMatch: 1.5` — 설정 파일이 아니라 `src/personalize.ts` 하드코딩,
   라이브러리/위시리스트 각각 최대 1회),
-  발행이 `recency_hours: 72` 이내면 최신 가산 +1.0. labels는
-  `library`/`wishlist`/`library-title`/`wishlist-title`/`recent` 중 해당 항목을 부여하고,
-  어느 조건에도 해당하지 않으면 기본 라벨 1개를 부여한다.
+  발행이 `recency_hours: 72` 이내면 최신 가산 +1.0.
+  여기에 소스 가중치를 합산한다 (`src/select.ts:134-137`) — `audience`의 `source_weights`에서
+  url·source 부분일치(최장 키 우선, 미매칭 시 default 1.0)로 값을 찾는다.
+  값은 default 1.0 / r/Games 1.2 / indiegames 0.3 / GameDeals 0.5 /
+  pcgamer 2.0 / vg247·gamesindustry 1.8 / pcgamesn 1.6 / rpgsite 1.4다.
+  등급 라벨을 붙인다 — 1.4 이상 `source:press`, 0.8 이상 `source:community`, 그 외 `source:low`.
+  labels는 `library`/`wishlist`/`library-title`/`wishlist-title`/`recent` + `source:등급`이다.
+  소스 가중치가 항상 더해져 라벨이 비는 경우가 없으므로, 코드에 남은 `unranked` 폴백(`select.ts:138`)은 실행되지 않는다.
+  넣은 이유: 일반 섹션이 최신순으로만 뽑히니 개발자 자가 홍보 글이 언론 기사를 밀어냈다
+  ("팝릿 - 필리프 스타일 캐주얼 RPG!" 같은 항목이 실제로 올라옴).
+  정식 런에서 extra 3건이 전부 `source:press`로 바뀐 것이 그 실증이다.
   개인화 풀에서 `batch.final: 5`건, 일반 풀에서 `batch.extra: 3`건을 뽑는다
   (점수 내림차순, 동점 시 최신순).
 - 묶음 크기 이유 (명세 요구): 수집량이 수백 건대(정식 런 실측 271~280건 — 위시 51종×5가 대부분)라
@@ -152,8 +160,19 @@ graph LR
 - collect: `resolveTiers` 확정 → `collectTierSteamNews`(Tier0 위시 전수×5 + Tier1 최근30일×3) +
   `collectRss`(reddit+press, pool 상한) 병렬, `fetchAppMeta`로 게임명·장르 캐시,
   `collectSaleWatch`(위시 20%+ → `steam-sale` 합성) 후
-  `loadSeen`→`filterUnseenSteam`→`updateSeen`→`saveSeen`(`store/seen.json`, Steam만).
+  `loadSeen`→`filterUnseenSteam`으로 걸러내기만 하고, 저장은 publish 성공 후에 한다 (`store/seen.json`, 아래 seen 항목 참조).
   metrics detail 형식: `steam=X(fresh=Y sale=Z) rss=W tier0=A tier1=B tiers=steam|audience`.
+- seen (증분 구조, `src/collect/tiers.ts:80-135`): `{published: {itemId: unixSec}}` — 실제 발행한 항목 id만 기록한다.
+  바뀐 이유: 기존 앱별 커서는 수집분 전체의 커서를 전진시켜서, 실제 발행은 5건인데 241건이 전부 "봤다"로 기록됐다.
+  사용자 런에서 collect `steam=9(fresh=0 sale=9) tier0=241`로 찍혀 개인화 섹션에 Steam 공지가 한 건도 못 올라온 것이 그 결과다.
+  지금은 미발행 수집분이 다음 런 후보로 남는다 (실측: 06:22 런 Steam 수집 265건 중 발행 8건만 기록, 257건 후보 유지. RSS 30건 별도).
+  기록 시점은 collect 직후가 아니라 publish 성공 후다 (`src/graph.ts:114-115,267-271`).
+  하류 실패(파일 쓰기 throw) 시 저장을 건너뛰어 수집분이 영구히 사라지지 않는다 (실패 경로 확인됨).
+  Discord 실패(`delivered=false`)여도 파일 저장이 됐으면 기록한다.
+  `SEEN_RETENTION_DAYS=30` — saveSeen 때 30일 초과 기록을 정리해 파일이 무한정 자라지 않게 한다 (사용자 요청 "seen 유효기간").
+  할인(sale)은 기록하지 않는다 — 가격이 바뀌면 다시 알려야 해서 매번 후보에 둔다.
+  한계: 구 형식(apps 커서)은 정확한 변환이 불가능해서 다음 런에서 빈 published로 시작한다.
+  첫 1회는 기발행분이 중복 후보가 될 수 있다.
 - personalize: `buildProfile(effAud)` → 06:15 런 기준 `library=5 wishlist=51`, titleIndex 55건.
 - filter: 수집분을 `{sale, personal, general}` 세 풀로 분할(§3).
   sale은 `sale: 5`건, personal·general은 풀별 pool 30건.
@@ -183,19 +202,18 @@ graph LR
   번역된 요약 뒤에 검사하면 영어 제목 토큰을 한국어 문장에서 찾을 수 없어 검사가 무력해진다.
   translate를 verify 뒤·발행 직전에 둔 이유다.
   실증이 아니라 관측으로 적는다 (2026-09-15T06:15 정식 런): 연도·날짜 검사가 발동해 재생성 1회를 돌렸고,
-  재검사 탈락으로 해당 항목을 발행에서 스킵했다. "환각 검출"로 단정하지 않는다 —
-  대조 범위가 본문(`item.content`)뿐이라 (`src/verify.ts:57-61`),
-  제목에만 있고 본문에 없는 연도·날짜 표현은 오탐할 수 있다. 해당 런의 원문은 미확보 상태다.
+  재검사 탈락으로 해당 항목을 발행에서 스킵했다. 대조 범위는 제목+본문이다 (`src/verify.ts:75-78`).
+  다만 그 런의 원문을 지금 확인할 수 없어 "환각 검출"로 단정하지는 않는다.
   같은 런 verify 기록은 count=7 (8건 중 7건 통과·1건 스킵):
 
   ```text
   {"ts":"2026-09-15T06:15:22.450Z","stage":"verdict-fail","count":0,"detail":"rss-7f18b06fb0a5baed:재생성 후에도 실패: 원문에 없는 연도·날짜 표현: 2027 (기존 실패: 원문에 없는 연도·날짜 표현: 2027)"}
   ```
 - briefing: `buildDigest` (`src/digest.ts`) — 선별 풀(`filtered`)의 제목 목록을 보고
-  평문 1문단(2~4문장) 브리핑. md·Discord 모두 헤더 없이 평문 문단만 들어간다.
+  평문 1문단(2~3문장) 브리핑. md·Discord 모두 헤더 없이 평문 문단만 들어간다.
   원문이 없거나 호출 실패 시 빈 문자열이라 섹션이 생략된다. metrics stage `digest`.
-  이 브리핑이 인사이트 역할을 맡는다. digest 프롬프트의 독자 관점 강화는 진행 중이라 (memo 작업),
-  반영되면 이 서술도 갱신한다.
+  이 브리핑이 인사이트 역할을 맡는다. digest 프롬프트는 독자 관점을 직접 지시한다
+  (`src/digest.ts:47-55` — heavy gamer 독자 정의, 1~2개 핵심 기사 집중, "독자에게 중요한 것과 이유·후속 행동" 서술).
 - translate (신규): `translateToKorean` (`src/translate.ts`) — summaries 불릿과 digest를 발행 직전에 한국어로 번역한다.
   성공 시 `translated: true`. 미번역(원어 그대로) 항목은 발행물에 `(원문 요약)` 표시가 붙는다. metrics stage `translate`.
   검증은 불릿 2~3개 허용 + 원문 개수 일치·URL 미포함·한글 포함 여부를 보고 (`src/translate.ts:69-82`). 200자 초과는 버리지 않고 절단해 수용한다.
@@ -209,6 +227,7 @@ graph LR
   Steam 수집분은 Store 메타에서 `gameName`을 기록하고, RSS분은 appId가 없어 `gameName`이 비어 행이 생략된다.
   md 출처 행은 `- 출처: {사이트} · [원문](url)`,
   Discord 전송문은 `[출처: {사이트}](<url>)` 형식으로, URL을 `<>`로 감싸 임베드 미리보기를 억제한다.
+  수신 캡처에서 출처가 링크로만 뜨고 미리보기가 없는 것이 이 처리의 실제 증거다 (§5 캡처 참조).
   Discord는 항목별 분할 발송이 아니라 하나로 묶어 보내고, 2000자 초과 시 항목 경계에서 분할한다.
   단 한 항목 통째로 한도를 넘으면 그 항목만 `…(이하 생략)`으로 절단한다 (`src/publish.ts` `truncateBlock`·`TRUNC_MARK`).
 - 진행 로그: 실행 중 `[1/9] 수집` … `[9/9] 발행` 9단계가 stdout에 찍힌다 (노드 순서대로).
@@ -217,58 +236,79 @@ graph LR
 
 ## 5. 실행 기록
 
-`store/metrics.jsonl` 최신 완주 런 실측 (2026-09-15T06:27~06:33, 정규 런.
+`store/metrics.jsonl` 읽는 법 (세대차 안내): 이 파일은 207줄 전체를 그대로 커밋한다.
+개발 과정 전체가 시간순(02:59→06:54)으로 쌓인 기록이라 폴백 런·검수 탈락·증분 동작 근거가 전부 들어 있다.
+다만 seen 구조가 바뀌어서, 최신 런만 현행 코드 기준이다.
+05:26·06:15·06:23·06:27 런은 전부 구 커서(앱별 마지막 gid·date) 방식 시절 기록이다.
+06:53 정식 런(아래 표)이 현행 구조(발행분 id 집합) 첫 기록이다.
+그래서 06:27의 collect `fresh=0` 같은 수치는 "수집분 전체를 봤다고 기록했다"는 구 동작의 결과로 읽어야 한다.
+현행 구조(발행분 id만 기록)에서는 같은 상황이 재현되지 않는다 — 미발행 수집분은 다음 런 후보로 남는다.
+옛 레코드를 무시하라는 뜻이 아니다. 폴백·검수 근거로서 가치는 그대로다. 세대만 구분해서 읽으면 된다.
+저장소의 `store/seen.json`은 새 형식(published)만 남는다 (구 apps 형식 파일은 삭제되고 다음 런부터 새로 생성됨).
+
+`store/metrics.jsonl` 정식 런 실측 (2026-09-15T06:53~06:54.
+프로바이더 OpenAI 유료 API, `gpt-4o-mini` — 아래 캡처 첫 줄 확인.
 `--dry-run`은 `src/run.ts:127-130`에서 기록 전에 return하므로 metrics를 남기지 않는다):
 
 | stage | count | detail |
 | --- | --- | --- |
-| collect | 39 | steam=9(fresh=0 sale=9) rss=30 tier0=241 tier1=15 tiers=steam |
-| personalize | 55 | library=5 wishlist=51 |
-| filter | 30 | pool=39 personal=2 general=28 sale=5 |
-| rank | 5 | personal=2 (wishlist-title+recent ×2) + extra=3 |
-| summarize | 5 | sourceKo=0 |
-| verify | 5 | 5 pass (재생성 0건) |
-| digest | 1 | chars=588 pool=30 |
-| translate | 5 | ok=5 ko=0 failed=0 |
-| publish | 5 | delivered=true parts=2 sale=5 |
+| collect | 295 | steam=265(fresh=256 sale=9) rss=30 tier0=241 tier1=15 tiers=steam |
+| personalize | 55 | library=5 wishlist=51 noMeta=0 |
+| filter | 58 | pool=295 personal=30 general=28 sale=5 |
+| rank | 8 | personal=5 (wishlist×2 + library×3, 모두 source:community) + extra=3 (recent+source:press ×3) |
+| summarize | 8 | sourceKo=0 |
+| verify | 8 | 8 pass (재생성 0건) |
+| digest | 1 | chars=553 pool=58 |
+| translate | 8 | ok=8 ko=0 failed=0 skipped=0 |
+| publish | 8 | delivered=true parts=2 sale=5 seen=8ids |
 
-- seen 증분이 동작한 완주다: 티어 수집 256건(tier0=241+tier1=15)이 전부 기존 커서라 fresh=0 →
-  sale 9 + RSS 30으로 풀 39 → personal 2 + extra 3, 선정 5. 할인 5종은 별도 섹션으로 발행됐다.
-- 전량 번역 성공 (`translate ok=5`), Discord는 2000자 분할로 2개 묶음 (`parts=2`).
+- fresh=256 — 이번 seen 구조 변경의 실증이다. 구 커서 시절 06:27 런은 수집 256건이 전부 "봤다"로 기록돼 fresh=0이었지만,
+  현행 구조(발행분 id만 기록)인 이번 런은 미발행분이 후보로 남아 fresh=256이 수집됐다. 세대차 안내와 같은 맥락이다.
+- seen=8ids — 수집 295건 중 실제 발행한 8건만 기록했다 (Steam 265건 중 8건 기록·257건 후보 유지. RSS 30건은 별도).
+- translate ok=8 failed=0 — 전건 한국어 번역 성공이다.
+- verify 8/8 pass, 재생성 0 — 이번 런에서는 환각 탈락이 없었다. 06:15 런의 2027 관측(아래)과 구분된다.
+- parts=2 — Discord가 항목 경계에서 2개 메시지로 분할됐다. 분할 발송이 실제로 동작한 기록이다.
+
+![실행 화면](docs/run-terminal.jpeg)
+
+위 캡처에 9단계 진행 로그(`[1/9]` 수집 … `[9/9]` 발행)와 발행 결과(선정 8건·검수 실패 0건·발행 파일 경로)가 모두 보인다.
+명세 52행 "최종 검수를 거쳐 정상 발행된 결과 화면 캡처" 요구에 이 캡처로 답한다.
+터미널 캡처는 파이프라인 실행 증거이고, 아래 Discord 캡처는 목표 채널에 실제로 전달됐다는 증거다. 역할이 다르다.
+
+![수신 화면](docs/discord-delivery.jpeg)
+
+위 캡처에서 직접 확인한 것만 적는다. 발신자는 Questail 앱(웹훅), 시각 오후 3:54다.
+상단에 브리핑 평문이 헤더 없이 먼저 오고(md와 동일), 그 아래 "내 게임 소식" 섹션 헤더가 있다.
+항목마다 제목(볼드) + 불릿 + 게임명 행("게임: Ratatan · Windows" — Steam 수집분에만 붙는다) + 출처 링크 순이다.
+출처는 링크로 뜨는데 임베드 미리보기가 없다 — URL을 `<>`로 감싼 처리가 실제로 동작한 증거다 (§4 publish 근거).
+불릿이 항목당 2개로 나왔다 — 3개 고정이 아니라 2~3개 허용으로 바꾼 결과다.
+이 캡처에는 두 번째 메시지나 할인 섹션이 잡혀 있지 않다. 그 부분은 metrics의 `parts=2`·`sale=5`로 뒷받침한다.
+명세 5단계 "최종 발행 — 검수를 최종 통과한 콘텐츠가 목표 채널에 문제없이 전달 및 발행되는지 확인"에 이 캡처로 답한다.
 
 `pnpm check:tiers` 실측:
 
 ```text
 tiers constants: Tier0=5 Tier1=3 recent=30d sale>=20%
 seen: in=5 fresh=3 ids=steam-440-101,steam-440-102,steam-252490-1
-seen incremental OK (cursor advances, replays blocked)
+seen published-set OK (발행분만 제외, 미발행분은 다음 런 후보)
+[seen] 구 형식 seen.json(apps 커서)을 발견 — published 빈 집합으로 시작합니다
+seen migration OK (구 apps 형식 → 빈 published)
 sale threshold OK (19→drop, 20/75→steam-sale)
 tiers live: source=steam wishlist=51 recent=5 library=5
 OK check-tiers
 ```
 
-- `output/latest.md` (06:33 덮어씀): 한국어 번역 상태 확인.
-  브리핑 평문 문단 (헤더 없음) + 내 게임 소식 2건(몬스터 헌터 와일드스·아크 레이더스) +
-  그 외 3건 + 할인 5종(ROUTINE 30%·포션퍼밋 70%·Wartales 72%·힌터베르그의 던전 70%·Split Fiction 35%).
-  항목마다 제목 + 불릿 3개 + 출처·원문 링크.
-- Discord: 해당 런 `delivered=true`(metrics 기록). 단 실제 Discord 화면 캡처는 미확인으로 둔다.
-- 환각 검수 관측 (06:15 런): 연도·날짜 검사가 발동해 (`2027` 표현) 재생성 1회를 돌렸고,
-  재검사 탈락으로 해당 항목을 스킵했다. verify count=7 (8건 중 7건 통과·1건 스킵).
-  본문 대조 한계는 §4 각주 참조. 원문 기록은 §4 검수 항목 참조.
-- 같은 날 이전 런 (06:15) 참고 수치:
-  collect 280 (steam 250=fresh 241+sale 9, rss 30) · personalize 55 (library=5 wishlist=51) ·
-  filter 58 (pool=280 personal=30 general=28) · summarize 8 (sourceKo=5) ·
-  digest chars=263 · translate ok=2 ko=5 failed=0 · publish 7 delivered=true parts=1.
-  한계: 이 런은 할인 별도 섹션 분리 전이라 개인화 5건이 전부 할인 아이템이었다 (verify의 steam-sale-* 5건).
-  verify 스킵 1건이 발생한 런이기도 하다.
+- `output/latest.md` (06:54 덮어씀, 위 정식 런 산출): 한국어 번역 상태 확인.
+  브리핑 평문 문단 (헤더 없음) + 내 게임 소식 5건(라타탄·Triple-i·콘텐츠 업데이트·Retail Hell·Trial by Fryer) +
+  그 외 3건(Aniimo·킹메이커스·디아블로 IV) + 할인 5종.
+  항목마다 제목 + 불릿 + 출처·원문 링크.
+- Discord: 위 정식 런 `delivered=true`(metrics 기록). 수신 화면은 위 캡처 참조.
+- 환각 검수 관측 (06:15 런 — 위 정식 런과 다른 런): 연도·날짜 검사가 발동해 (`2027` 표현) 재생성 1회를 돌렸고,
+  재검사 탈락으로 해당 항목을 스킵했다. verify count=7 (8건 중 7건 통과·1건 스킵). 원문 기록은 §4 검수 항목 참조.
 - 주의: `output/latest.md`는 매 실행마다 덮어쓴다. 위 인용은 열람 시점 파일 기준이며 후속 런에 덮어씌워질 수 있다.
 - 참고: 티어 적용 전 런(03:41)은 collect 45(steam15+rss30)·personalize library=2였으며,
   그 이전 런들은 `translated=0`(폴백)·`delivered=false`(웹훅 미설정) 상태였고
   파일 저장(`output/latest.md`)은 항상 수행.
-
-> **F 후속 예정:** F 적용 후 정식 런 수치로 교체한다 (kimi가 별도 제공).
-> 정식 런 프로바이더는 OpenAI 유료 API다 (로컬 Ollama가 아님). 모델명은 확정 후 기입한다.
-> Discord 수신 화면 캡처도 그때 함께 첨부한다.
 
 ### 매일 아침 실행 (스케줄러 — 코드 내장 대신 OS에 거는 방법)
 
