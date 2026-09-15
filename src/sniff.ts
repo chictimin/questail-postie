@@ -13,6 +13,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { fetchOwnedAppIds, resolveToSteamId } from "./steamid.js";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const ENV_FILE = resolve(ROOT, ".env");
@@ -401,6 +402,30 @@ async function main(): Promise<void> {
   const wishInput = await textInput(ks, "위시리스트 appID (쉼표 구분)", wishlistAppIds.join(", "));
   if (wishInput.trim()) wishlistAppIds = parseAppIds(wishInput);
 
+  header("Steam 연동");
+  let steamKey = process.env.STEAM_API_KEY || "";
+  let steamId64 = process.env.STEAM_ID || "";
+  const steamInput = await textInput(
+    ks,
+    "Steam 프로필 (URL·ID·vanity, Enter=건너뛰기)",
+    steamId64,
+  );
+  if (steamInput.trim()) {
+    if (!steamKey) steamKey = await secretInput(ks, "Steam API 키 (없으면 Enter)");
+    if (!steamKey) {
+      process.stdout.write("키가 없어 Steam 연동을 건너뜁니다.\n");
+    } else {
+      try {
+        steamId64 = await resolveToSteamId(steamInput, steamKey);
+        const owned = await fetchOwnedAppIds(steamKey, steamId64);
+        libraryAppIds = [...new Set(owned)];
+        process.stdout.write(`Steam 보유 ${owned.length}건을 라이브러리에 반영합니다.\n`);
+      } catch (err) {
+        process.stdout.write(`Steam 연동 실패: ${err instanceof Error ? err.message : String(err)}\n수동 입력값을 유지합니다.\n`);
+      }
+    }
+  }
+
   header("발행 설정");
   if (process.env.DISCORD_WEBHOOK_URL) {
     process.stdout.write(`현재 웹훅: ${maskValue(process.env.DISCORD_WEBHOOK_URL)}\n`);
@@ -416,6 +441,7 @@ async function main(): Promise<void> {
   process.stdout.write(`Discord 웹훅: ${maskValue(finalWebhook)}\n`);
   process.stdout.write(`라이브러리: [${libraryAppIds.join(", ")}]\n`);
   process.stdout.write(`위시리스트: [${wishlistAppIds.join(", ")}]\n`);
+  process.stdout.write(`Steam: ${steamId64 ? `연동 (${libraryAppIds.length}건 반영)` : "미연동"}\n`);
   const action = await menu(ks, "어떻게 할까요", ["저장 후 실행", "저장만", "취소"]);
   ks.close();
 
@@ -428,6 +454,8 @@ async function main(): Promise<void> {
     OPENAI_API_KEY: provider === 2 ? "" : apiKey,
     MODEL: model,
     DISCORD_WEBHOOK_URL: finalWebhook,
+    STEAM_API_KEY: steamKey,
+    STEAM_ID: steamId64,
   });
   await writeFile(
     AUDIENCE_FILE,
