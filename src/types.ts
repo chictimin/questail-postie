@@ -64,3 +64,12 @@ export interface Audience {
   reddit_feeds: string[];
   press_feeds: string[];
 }
+
+export interface PersonalProfile {
+  mode: "personal" | "general";
+  libraryAppIds: number[];
+  wishlistAppids: number[];
+  titleIndex: Array<{ appId: number; list: "library" | "wishlist"; names: string[] }>;
+  weights: { libraryMatch: number; wishlistMatch: number; titleMatch: number; recency: number };
+  recencyHours: number;
+}

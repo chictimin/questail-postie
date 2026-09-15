@@ -3,6 +3,9 @@ import type { NewsItem } from "../types.js";
 
 const parser = new Parser();
 
+const FEED_TIMEOUT_MS = 15_000;
+const USER_AGENT = "questail-postie/0.1 (+newsletter-agent)";
+
 function hash16(input: string): string {
   let h1 = 0x811c9dc5;
   let h2 = 0x01000193;
@@ -23,47 +26,82 @@ function feedSource(feedUrl: string): string {
   }
 }
 
+async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
+  let res: Response;
+  try {
+    res = await fetch(feedUrl, {
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+      headers: {
+        "user-agent": USER_AGENT,
+        accept: "application/rss+xml, application/xml, text/xml, */*",
+      },
+    });
+  } catch {
+    return [];
+  }
+  if (res.status === 429) return [];
+  if (!res.ok) return [];
+  let xml: string;
+  try {
+    xml = await res.text();
+  } catch {
+    return [];
+  }
+  let feed: { items?: Array<Record<string, unknown>> };
+  try {
+    feed = (await parser.parseString(xml)) as typeof feed;
+  } catch {
+    return [];
+  }
+  const source = feedSource(feedUrl);
+  const out: NewsItem[] = [];
+  for (const raw of feed.items ?? []) {
+    const entry = raw as {
+      link?: string;
+      title?: string;
+      creator?: string;
+      author?: string;
+      contentSnippet?: string;
+      content?: string;
+      pubDate?: string;
+      isoDate?: string;
+    };
+    const link = entry.link ?? feedUrl;
+    const title = entry.title ?? "(no title)";
+    const author = entry.creator ?? entry.author ?? "";
+    const snippet =
+      entry.contentSnippet?.slice(0, 2000) ??
+      entry.content?.slice(0, 2000) ??
+      "";
+    let publishedAt = Math.floor(Date.now() / 1000);
+    const dateStr = entry.pubDate ?? entry.isoDate;
+    if (dateStr) {
+      const parsed = Date.parse(dateStr);
+      if (!Number.isNaN(parsed)) publishedAt = Math.floor(parsed / 1000);
+    }
+    out.push({
+      id: `rss-${hash16(link)}`,
+      title,
+      url: link,
+      source,
+      feedType: "rss",
+      publishedAt,
+      author,
+      content: snippet,
+      lang: "unknown",
+    });
+  }
+  return out;
+}
+
 export async function collectRss(
   urls: string[],
   poolCap: number,
 ): Promise<NewsItem[]> {
+  const settled = await Promise.allSettled(urls.map((u) => fetchFeedItems(u)));
   const out: NewsItem[] = [];
-  for (const feedUrl of urls) {
-    try {
-      const feed = await parser.parseURL(feedUrl);
-      const source = feedSource(feedUrl);
-      for (const entry of feed.items ?? []) {
-        const link = entry.link ?? feedUrl;
-        const title = entry.title ?? "(no title)";
-        const author =
-          (entry as { creator?: string }).creator ?? entry.author ?? "";
-        const snippet =
-          entry.contentSnippet?.slice(0, 2000) ??
-          entry.content?.slice(0, 2000) ??
-          "";
-        let publishedAt = Math.floor(Date.now() / 1000);
-        if (entry.pubDate) {
-          const parsed = Date.parse(entry.pubDate);
-          if (!Number.isNaN(parsed)) publishedAt = Math.floor(parsed / 1000);
-        } else if (entry.isoDate) {
-          const parsed = Date.parse(entry.isoDate);
-          if (!Number.isNaN(parsed)) publishedAt = Math.floor(parsed / 1000);
-        }
-        out.push({
-          id: `rss-${hash16(link)}`,
-          title,
-          url: link,
-          source,
-          feedType: "rss",
-          publishedAt,
-          author,
-          content: snippet,
-          lang: "unknown",
-        });
-      }
-    } catch {
-      continue;
-    }
+  for (const r of settled) {
+    if (r.status === "fulfilled") out.push(...r.value);
   }
   out.sort((a, b) => b.publishedAt - a.publishedAt);
   return out.slice(0, poolCap);

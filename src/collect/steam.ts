@@ -22,6 +22,8 @@ interface AppMeta {
   keywords: string[];
 }
 
+const FETCH_TIMEOUT_MS = 15_000;
+
 const metaCache = new Map<number, AppMeta>();
 
 function toNewsItem(appId: number, raw: SteamNewsItemRaw): NewsItem {
@@ -47,7 +49,9 @@ export async function collectSteamNews(
   for (const appId of appIds) {
     const endpoint = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appId}&count=${countPerApp}&format=json`;
     try {
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) continue;
       const data = (await res.json()) as SteamNewsResponse;
       const items = data.appnews?.newsitems ?? [];
@@ -68,7 +72,9 @@ export async function fetchAppMeta(appId: number): Promise<AppMeta> {
   const fallback: AppMeta = { name: String(appId), genres: [], keywords: [] };
   try {
     const endpoint = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=korean`;
-    const res = await fetch(endpoint);
+    const res = await fetch(endpoint, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) {
       metaCache.set(appId, fallback);
       return fallback;

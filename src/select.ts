@@ -1,74 +1,71 @@
-import type { Audience, NewsItem, ScoredItem } from "./types.js";
-
-interface AppMetaInfo {
-  name: string;
-  genres: string[];
-  keywords: string[];
-}
-
-const RECENCY_BONUS = 1.0;
+import type { Audience, NewsItem, PersonalProfile, ScoredItem } from "./types.js";
 
 function isRecent(publishedAt: number, recencyHours: number, nowSec: number): boolean {
   return nowSec - publishedAt <= recencyHours * 3600;
 }
 
-export function selectNews(
-  items: NewsItem[],
-  aud: Audience,
-  _meta: Map<number, AppMetaInfo>,
-): { shortlist: ScoredItem[]; final: ScoredItem[] } {
-  void _meta;
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function filterNews(items: NewsItem[], aud: Audience): NewsItem[] {
   const seen = new Set<string>();
-  const pool: NewsItem[] = [];
+  const out: NewsItem[] = [];
   for (const item of items) {
     if (aud.exclude.some((kw) => kw.length > 0 && item.title.includes(kw))) {
       continue;
     }
     if (seen.has(item.url)) continue;
     seen.add(item.url);
-    pool.push(item);
+    out.push(item);
   }
-  pool.sort((a, b) => b.publishedAt - a.publishedAt);
-  const capped = pool.slice(0, aud.batch.pool);
+  out.sort((a, b) => b.publishedAt - a.publishedAt);
+  return out.slice(0, aud.batch.pool);
+}
 
-  if (!aud.personalize) {
-    const flat: ScoredItem[] = capped.map((item) => ({
-      ...item,
-      score: 0,
-      labels: ["general"],
-    }));
-    return {
-      shortlist: flat.slice(0, aud.batch.shortlist),
-      final: flat.slice(0, aud.batch.final),
-    };
-  }
-
+export function rankFinal(
+  items: NewsItem[],
+  profile: PersonalProfile,
+  aud: Audience,
+): ScoredItem[] {
+  const library = new Set(profile.libraryAppIds);
+  const wishlist = new Set(profile.wishlistAppids);
   const nowSec = Math.floor(Date.now() / 1000);
-  const library = new Set(aud.library_appids);
-  const wishlist = new Set(aud.wishlist_appids);
-
-  const scored: ScoredItem[] = capped.map((item) => {
+  const patterns = profile.titleIndex.flatMap((entry) =>
+    entry.names
+      .filter((n) => n.length >= 4)
+      .map((n) => ({
+        re: new RegExp(`\\b${escapeRegExp(n)}\\b`),
+        list: entry.list,
+      })),
+  );
+  const scored: ScoredItem[] = items.map((item) => {
     let score = 0;
-    const labels: string[] = [];
+    const labels = new Set<string>();
     if (item.appId !== undefined && library.has(item.appId)) {
-      score += aud.weights.library_match;
-      labels.push("library");
+      score += profile.weights.libraryMatch;
+      labels.add("library");
     }
     if (item.appId !== undefined && wishlist.has(item.appId)) {
-      score += aud.weights.wishlist_match;
-      labels.push("wishlist");
+      score += profile.weights.wishlistMatch;
+      labels.add("wishlist");
     }
-    if (isRecent(item.publishedAt, aud.weights.recency_hours, nowSec)) {
-      score += RECENCY_BONUS;
-      labels.push("recent");
+    const hay = `${item.title}\n${item.content}`.toLowerCase();
+    const titleKinds = new Set<"library" | "wishlist">();
+    for (const p of patterns) {
+      if (p.re.test(hay)) titleKinds.add(p.list);
     }
-    if (labels.length === 0) labels.push("general");
-    return { ...item, score, labels };
+    for (const kind of titleKinds) {
+      score += profile.weights.titleMatch;
+      labels.add(kind === "library" ? "library-title" : "wishlist-title");
+    }
+    if (isRecent(item.publishedAt, profile.recencyHours, nowSec)) {
+      score += profile.weights.recency;
+      labels.add("recent");
+    }
+    if (labels.size === 0) labels.add("general");
+    return { ...item, score, labels: [...labels] };
   });
-
   scored.sort((a, b) => b.score - a.score || b.publishedAt - a.publishedAt);
-  return {
-    shortlist: scored.slice(0, aud.batch.shortlist),
-    final: scored.slice(0, aud.batch.final),
-  };
+  return scored.slice(0, aud.batch.final);
 }

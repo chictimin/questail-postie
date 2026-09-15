@@ -12,19 +12,56 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const ENV_FILE = resolve(ROOT, ".env");
+const AUDIENCE_FILE = resolve(ROOT, "audience.yaml");
+
+function isLocalhostUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === "localhost" || host === "::1" || host === "127.0.0.1" || host.startsWith("127.");
+  } catch {
+    return false;
+  }
+}
+
+function parseAppIds(input: string): number[] {
+  const ids = input
+    .split(",")
+    .map((t) => Number(t.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return [...new Set(ids)];
+}
 
 // ─── 키 입력 ────────────────────────────────────────────────────
 
-type Key = { kind: "up" } | { kind: "down" } | { kind: "enter" } | { kind: "backspace" } | { kind: "char"; ch: string } | { kind: "eof" };
+type Key = { kind: "up" } | { kind: "down" } | { kind: "enter" } | { kind: "backspace" } | { kind: "char"; ch: string } | { kind: "esc" } | { kind: "eof" };
+
+class SniffCancel extends Error {}
+
+const ESC_WAIT_MS = 50;
 
 function createKeyStream(): { nextKey: () => Promise<Key>; close: () => void } {
   let buffer = Buffer.alloc(0);
   let ended = false;
   const keyQueue: Key[] = [];
   const waiters: Array<(k: Key) => void> = [];
+  let escTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function emit(key: Key): void {
+    const waiter = waiters.shift();
+    if (waiter) waiter(key);
+    else keyQueue.push(key);
+  }
+
+  function clearEscTimer(): void {
+    if (escTimer !== null) {
+      clearTimeout(escTimer);
+      escTimer = null;
+    }
+  }
 
   function tryEmit(): Key | null {
     if (buffer.length === 0) return null;
@@ -35,9 +72,10 @@ function createKeyStream(): { nextKey: () => Promise<Key>; close: () => void } {
       if (code === 0x42) return { kind: "down" };
       return tryEmit();
     }
-    if (buffer[0] === 0x1b && buffer.length >= 1 && (ended || buffer.length === 1)) {
+    if (buffer[0] === 0x1b && buffer.length === 1 && !ended) return null;
+    if (buffer[0] === 0x1b && buffer.length === 1 && ended) {
       buffer = buffer.subarray(1);
-      return tryEmit();
+      return { kind: "esc" };
     }
     if (buffer[0] === 0x1b) return null;
     const byte = buffer[0];
@@ -49,11 +87,20 @@ function createKeyStream(): { nextKey: () => Promise<Key>; close: () => void } {
   }
 
   function pump(): void {
+    if (buffer.length === 1 && buffer[0] === 0x1b && !ended && escTimer === null) {
+      escTimer = setTimeout(() => {
+        escTimer = null;
+        if (buffer.length === 1 && buffer[0] === 0x1b && !ended) {
+          buffer = buffer.subarray(1);
+          emit({ kind: "esc" });
+        }
+        pump();
+      }, ESC_WAIT_MS);
+      return;
+    }
     let key: Key | null;
     while ((key = tryEmit()) !== null) {
-      const waiter = waiters.shift();
-      if (waiter) waiter(key);
-      else keyQueue.push(key);
+      emit(key);
     }
     if (ended) {
       let waiter: ((k: Key) => void) | undefined;
@@ -62,10 +109,12 @@ function createKeyStream(): { nextKey: () => Promise<Key>; close: () => void } {
   }
 
   process.stdin.on("data", (chunk: Buffer) => {
+    clearEscTimer();
     buffer = Buffer.concat([buffer, chunk]);
     pump();
   });
   process.stdin.on("end", () => {
+    clearEscTimer();
     ended = true;
     pump();
   });
@@ -97,6 +146,7 @@ function createKeyStream(): { nextKey: () => Promise<Key>; close: () => void } {
       waiters.push(resolve);
     }),
     close: () => {
+      clearEscTimer();
       if (process.stdin.isTTY) {
         try {
           process.stdin.setRawMode(false);
@@ -138,6 +188,7 @@ async function menu(ks: KeyStream, message: string, choices: string[]): Promise<
   render();
   for (;;) {
     const key = await ks.nextKey();
+    if (key.kind === "esc") throw new SniffCancel();
     if (key.kind === "enter" || key.kind === "eof") return index;
     if (key.kind === "up") index = (index + choices.length - 1) % choices.length;
     else if (key.kind === "down") index = (index + 1) % choices.length;
@@ -159,6 +210,7 @@ async function textInput(ks: KeyStream, message: string, defaultValue = ""): Pro
   let value = "";
   for (;;) {
     const key = await ks.nextKey();
+    if (key.kind === "esc") throw new SniffCancel();
     if (key.kind === "enter" || key.kind === "eof") {
       process.stdout.write("\n");
       return value || defaultValue;
@@ -182,6 +234,7 @@ async function secretInput(ks: KeyStream, message: string): Promise<string> {
   let value = "";
   for (;;) {
     const key = await ks.nextKey();
+    if (key.kind === "esc") throw new SniffCancel();
     if (key.kind === "enter" || key.kind === "eof") {
       process.stdout.write("\n");
       return value;
@@ -198,6 +251,46 @@ async function secretInput(ks: KeyStream, message: string): Promise<string> {
       if (process.stdout.isTTY) process.stdout.write("*");
     }
   }
+}
+
+// ─── 모델 목록 조회 ─────────────────────────────────────────────
+
+const MODELS_TIMEOUT_MS = 10_000;
+
+export async function fetchModels(baseURL: string, apiKey?: string): Promise<string[]> {
+  try {
+    const endpoint = `${baseURL.replace(/\/+$/, "")}/models`;
+    const headers: Record<string, string> = {};
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+    const res = await fetch(endpoint, {
+      signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
+      headers,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { data?: Array<{ id?: unknown }> };
+    const ids = (data.data ?? [])
+      .map((d) => d.id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    return [...new Set(ids)];
+  } catch {
+    return [];
+  }
+}
+
+async function chooseModel(
+  ks: KeyStream,
+  baseURL: string,
+  apiKey: string | undefined,
+  fallbackDefault: string,
+): Promise<string> {
+  if (apiKey) {
+    const ids = await fetchModels(baseURL, apiKey);
+    if (ids.length > 0) {
+      const idx = await menu(ks, "모델 선택", ids);
+      return ids[idx] ?? fallbackDefault;
+    }
+  }
+  return textInput(ks, "모델명", fallbackDefault);
 }
 
 // ─── env 저장 ───────────────────────────────────────────────────
@@ -231,6 +324,36 @@ async function saveEnv(entries: Record<string, string>): Promise<void> {
   for (const [key, value] of Object.entries(entries)) process.env[key] = value;
 }
 
+// ─── audience.yaml surgical 저장 ────────────────────────────────
+// 전체 stringify 재쓰기 금지(포맷 churn 방지). 아래 3개 최상위 키의
+// 라인(플로·블록 리스트 모두)만 교체하고 나머지 원문은 그대로 둔다.
+
+function formatIdList(ids: number[]): string {
+  return `[${ids.join(", ")}]`;
+}
+
+export function patchAudienceYaml(
+  raw: string,
+  patch: { personalize: boolean; library_appids: number[]; wishlist_appids: number[] },
+): string {
+  const replacements: Array<[RegExp, string]> = [
+    [/^personalize:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `personalize: ${patch.personalize}`],
+    [/^library_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `library_appids: ${formatIdList(patch.library_appids)}`],
+    [/^wishlist_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `wishlist_appids: ${formatIdList(patch.wishlist_appids)}`],
+  ];
+  let out = raw;
+  for (const [re, line] of replacements) {
+    if (re.test(out)) {
+      out = out.replace(re, line);
+    } else if (out.trim() === "") {
+      out = `${line}\n`;
+    } else {
+      out = `${out.replace(/\n?$/, "\n")}${line}\n`;
+    }
+  }
+  return out;
+}
+
 // ─── 메인 ───────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -254,12 +377,36 @@ async function main(): Promise<void> {
     }
     apiKey = await secretInput(ks, "API 키");
     if (!apiKey && process.env.OPENAI_API_KEY) apiKey = process.env.OPENAI_API_KEY;
-    model = await textInput(ks, "모델명", process.env.MODEL || "gpt-4o-mini");
+    model = await chooseModel(ks, baseURL, apiKey || undefined, process.env.MODEL || "gpt-4o-mini");
   } else if (provider === 1) {
     header("로컬 모델 설정");
-    baseURL = await textInput(ks, "베이스 URL", process.env.OPENAI_BASE_URL || "http://localhost:11434/v1");
+    const existingBase = process.env.OPENAI_BASE_URL ?? "";
+    const localDefault = isLocalhostUrl(existingBase) ? existingBase : "http://localhost:11434/v1";
+    baseURL = await textInput(ks, "베이스 URL", localDefault);
     apiKey = await secretInput(ks, "API 키 (없으면 Enter)");
-    model = await textInput(ks, "모델명", process.env.MODEL || "llama3.1");
+    model = await chooseModel(ks, baseURL, apiKey || undefined, process.env.MODEL || "llama3.1");
+  }
+
+  header("개인화 설정");
+  const audRaw = await readFile(AUDIENCE_FILE, "utf-8");
+  const aud = parseYaml(audRaw) as {
+    personalize: boolean;
+    library_appids: number[];
+    wishlist_appids: number[];
+    [key: string]: unknown;
+  };
+  const personalizeIdx = await menu(ks, "개인화 모드", [
+    `개인화 사용 (현재: ${aud.personalize ? "사용" : "미사용"})`,
+    "비개인화 (인기·중요도순)",
+  ]);
+  const personalize = personalizeIdx === 0;
+  let libraryAppIds: number[] = Array.isArray(aud.library_appids) ? aud.library_appids : [];
+  let wishlistAppIds: number[] = Array.isArray(aud.wishlist_appids) ? aud.wishlist_appids : [];
+  if (personalize) {
+    const libInput = await textInput(ks, "라이브러리 appID (쉼표 구분)", libraryAppIds.join(", "));
+    if (libInput.trim()) libraryAppIds = parseAppIds(libInput);
+    const wishInput = await textInput(ks, "위시리스트 appID (쉼표 구분)", wishlistAppIds.join(", "));
+    if (wishInput.trim()) wishlistAppIds = parseAppIds(wishInput);
   }
 
   header("발행 설정");
@@ -275,6 +422,11 @@ async function main(): Promise<void> {
   process.stdout.write(`모델: ${provider === 2 ? "(미사용)" : model}\n`);
   process.stdout.write(`API 키: ${maskValue(provider === 2 ? "" : apiKey)}\n`);
   process.stdout.write(`Discord 웹훅: ${maskValue(finalWebhook)}\n`);
+  process.stdout.write(`개인화: ${personalize ? "사용" : "미사용"}\n`);
+  if (personalize) {
+    process.stdout.write(`라이브러리: [${libraryAppIds.join(", ")}]\n`);
+    process.stdout.write(`위시리스트: [${wishlistAppIds.join(", ")}]\n`);
+  }
   const action = await menu(ks, "어떻게 할까요", ["저장 후 실행", "저장만", "취소"]);
   ks.close();
 
@@ -288,6 +440,15 @@ async function main(): Promise<void> {
     MODEL: model,
     DISCORD_WEBHOOK_URL: finalWebhook,
   });
+  await writeFile(
+    AUDIENCE_FILE,
+    patchAudienceYaml(audRaw, {
+      personalize,
+      library_appids: libraryAppIds,
+      wishlist_appids: wishlistAppIds,
+    }),
+    "utf-8",
+  );
   console.log(`저장 완료: ${ENV_FILE}`);
 
   if (action === 0) {
@@ -314,7 +475,15 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+import { pathToFileURL } from "node:url";
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((err) => {
+    if (err instanceof SniffCancel) {
+      console.log("취소했습니다. 저장하지 않았습니다.");
+      process.exit(0);
+    }
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}

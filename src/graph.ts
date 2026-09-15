@@ -1,7 +1,8 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { collectSteamNews, fetchAppMeta } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
-import { selectNews } from "./select.js";
+import { buildProfile } from "./personalize.js";
+import { filterNews, rankFinal } from "./select.js";
 import { summarizeItems } from "./summarize.js";
 import { verifySummaries } from "./verify.js";
 import { publishAll } from "./publish.js";
@@ -9,6 +10,7 @@ import type {
   Audience,
   MetricRecord,
   NewsItem,
+  PersonalProfile,
   ScoredItem,
   Summary,
   Verdict,
@@ -25,6 +27,14 @@ export interface PipelineEnv {
 
 const PipelineState = Annotation.Root({
   rawItems: Annotation<NewsItem[]>({
+    reducer: (_prev, next) => next,
+    default: () => [],
+  }),
+  profile: Annotation<PersonalProfile | null>({
+    reducer: (_prev, next) => next,
+    default: () => null,
+  }),
+  filtered: Annotation<NewsItem[]>({
     reducer: (_prev, next) => next,
     default: () => [],
   }),
@@ -79,14 +89,36 @@ export async function runPipeline(
       });
       return { rawItems };
     })
-    .addNode("select", async (state) => {
-      const { shortlist, final } = selectNews(state.rawItems, aud, meta);
+    .addNode("personalize", async () => {
+      const profile = buildProfile(aud, meta);
+      metrics.push({
+        ts: nowIso(),
+        stage: "personalize",
+        count: profile.titleIndex.length,
+        detail: `mode=${profile.mode}`,
+      });
+      return { profile };
+    })
+    .addNode("filter", async (state) => {
+      const filtered = filterNews(state.rawItems, aud);
+      metrics.push({
+        ts: nowIso(),
+        stage: "filter",
+        count: filtered.length,
+        detail: `pool=${state.rawItems.length}`,
+      });
+      return { filtered };
+    })
+    .addNode("rank", async (state) => {
+      const profile = state.profile;
+      if (!profile) throw new Error("personalize 노드가 먼저 실행되어야 합니다.");
+      const final = rankFinal(state.filtered, profile, aud);
       for (const item of final) byId.set(item.id, item);
       metrics.push({
         ts: nowIso(),
-        stage: "select",
+        stage: "rank",
         count: final.length,
-        detail: `pool=${state.rawItems.length} shortlist=${shortlist.length} labels=${final.map((f) => f.labels.join("+")).join(",")}`,
+        detail: `labels=${final.map((f) => f.labels.join("+")).join(",")}`,
       });
       return { finalSel: final };
     })
@@ -144,8 +176,10 @@ export async function runPipeline(
       return { delivered };
     })
     .addEdge(START, "collect")
-    .addEdge("collect", "select")
-    .addEdge("select", "summarize")
+    .addEdge("collect", "personalize")
+    .addEdge("personalize", "filter")
+    .addEdge("filter", "rank")
+    .addEdge("rank", "summarize")
     .addEdge("summarize", "verify")
     .addEdge("verify", "publish")
     .addEdge("publish", END)
@@ -153,6 +187,8 @@ export async function runPipeline(
 
   const finalState = await graph.invoke({
     rawItems: [],
+    profile: null,
+    filtered: [],
     finalSel: [],
     summaries: [],
     verdicts: [],
