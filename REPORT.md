@@ -555,3 +555,43 @@ PATH에 없으면 `pnpm start`를 절대경로로 교체한다.
 - 인사이트를 digest로 옮기기
 - 실행 기록 샘플 커밋
 - 스케줄러는 문서화로 갈음
+- 본 프로젝트(questail) 흡수 검토 — 아래 참조
+
+### questail 본 프로젝트로의 흡수 검토
+
+이 실습은 별도 저장소로 시작했지만, 본 프로젝트 `questail`(`~/Desktop/code/questail`)에
+기능을 흡수하는 방향을 검토 중이다. 현재 확인된 접점과 조정 지점을 남겨둔다.
+
+**이미 공유하는 것**
+
+전역 설정 파일이 같다. `~/.config/questail/.env`에 `STEAM_API_KEY`·`STEAM_ID`를 두고
+양쪽이 읽는다. `src/globalConfig.ts`는 questail `packages/core/src/cli.ts`의 패턴을
+그대로 따랐고, `XDG_CONFIG_HOME` 처리도 동일하다. 즉 사용자가 한쪽에서 Steam을 등록하면
+다른 쪽도 바로 쓴다.
+
+**중복되는 것**
+
+| 기능 | questail | questail-postie |
+| --- | --- | --- |
+| Steam 연동 | `packages/core/src/connectors/steam.ts` | `src/steamid.ts`, `src/collect/steam.ts` |
+| 대화형 설정 | `cli.ts`의 `sniff` | `src/sniff.ts` |
+
+SteamID 해석(URL·vanity → SteamID64)과 보유 게임 조회는 양쪽에 따로 있다.
+흡수한다면 questail 커넥터를 재사용하고 postie 쪽을 걷어내는 게 맞다.
+`sniff`라는 이름 자체가 questail에서 가져온 것이라 CLI도 하나로 합쳐야 한다.
+
+**postie 고유 자산**
+
+questail에 없는 것은 뉴스레터 파이프라인 전체다 — RSS 수집, 예선·본선 2단계 선별,
+소스 가중치, 원어 요약과 발행 직전 번역, 환각 검수, seen 증분, Discord 발행.
+questail이 커넥터 아키텍처(`connectors/`)를 쓰므로, RSS를 커넥터로 편입하고
+파이프라인을 별도 패키지(`packages/postie` 등)로 두는 형태가 자연스럽다.
+
+**흡수 시 조정할 지점**
+
+- 모노레포 편입: questail은 pnpm workspace다. 패키지 경계와 빌드 스크립트를 맞춰야 한다.
+- i18n: questail은 ko/en 다국어(`i18n.ts`)를 지원하는데 postie는 한국어 발행 고정이다.
+  번역 단계의 목표 언어를 설정으로 빼야 한다.
+- 설정 파일: postie는 `audience.yaml`을 쓴다. questail 설정 체계와 통합할지,
+  뉴스레터 전용으로 분리해 둘지 결정이 필요하다.
+- 데모 폴백: postie의 `demo_appids`는 questail 쪽 데이터가 이미 있으면 불필요해질 수 있다.
