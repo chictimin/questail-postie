@@ -18,6 +18,35 @@ function hash16(input: string): string {
   return `${a}${b}`;
 }
 
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .trim();
+}
+
+/** rss-parser가 버리는 <media:content> 이미지 URL을 원문 XML에서 직접 추출한다. */
+function extractMediaImages(xml: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const itemRe = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const body = m[1];
+    const linkRaw = /<link\b[^>]*>([\s\S]*?)<\/link>/i.exec(body)?.[1];
+    if (!linkRaw) continue;
+    const link = decodeXmlEntities(linkRaw);
+    const tag =
+      /<media:content\b[^>]*medium=["']image["'][^>]*>/i.exec(body)?.[0] ??
+      /<media:content\b[^>]*>/i.exec(body)?.[0];
+    const url = tag ? decodeXmlEntities(/url=["']([^"']+)["']/i.exec(tag)?.[1] ?? "") : "";
+    if (link && url) map.set(link, url);
+  }
+  return map;
+}
+
 function feedSource(feedUrl: string): string {
   try {
     return new URL(feedUrl).hostname;
@@ -55,6 +84,7 @@ async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
   }
   const source = feedSource(feedUrl);
   const sourceName = feed.title?.trim().slice(0, 60) || source;
+  const mediaImages = extractMediaImages(xml);
   const out: NewsItem[] = [];
   for (const raw of feed.items ?? []) {
     const entry = raw as {
@@ -66,9 +96,16 @@ async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
       content?: string;
       pubDate?: string;
       isoDate?: string;
+      enclosure?: { url?: string; type?: string };
     };
     const link = entry.link ?? feedUrl;
     const title = entry.title ?? "(no title)";
+    const enclosureUrl = entry.enclosure?.url ?? "";
+    const enclosureType = entry.enclosure?.type ?? "";
+    const imageUrl =
+      enclosureUrl && (enclosureType === "" || enclosureType.startsWith("image/"))
+        ? enclosureUrl
+        : (mediaImages.get(link) ?? undefined);
     const author = entry.creator ?? entry.author ?? "";
     const snippet =
       entry.contentSnippet?.slice(0, 2000) ??
@@ -86,6 +123,7 @@ async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
           url: link,
           source,
           sourceName,
+          imageUrl,
       feedType: "rss",
       publishedAt,
       author,

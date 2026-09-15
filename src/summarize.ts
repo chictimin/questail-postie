@@ -52,11 +52,13 @@ function fallbackSummary(
   return {
     id: item.id,
     title: item.title,
+    titleKo: item.title,
     url: item.url,
     appId: item.appId,
     gameName: game?.name,
     platforms: game?.platforms ?? [],
     sourceName: item.sourceName,
+    imageUrl: item.imageUrl,
     bulletsKo: bullets,
     insightKo: truncate(
       `${item.title} 관련 소식이므로 원문에서 세부 내용을 확인하세요.`,
@@ -75,14 +77,16 @@ function parseLlmPayload(
 ): Summary {
   const sourceLang = detectSourceLang(item);
   const game = item.appId !== undefined ? meta?.get(item.appId) : undefined;
-  const finish = (bullets: string[], insight: string): Summary => ({
+  const finish = (bullets: string[], insight: string, titleKo: string): Summary => ({
     id: item.id,
     title: item.title,
+    titleKo: truncate(titleKo || item.title, MAX_LINE_CHARS),
     url: item.url,
     appId: item.appId,
     gameName: game?.name,
     platforms: game?.platforms ?? [],
     sourceName: item.sourceName,
+    imageUrl: item.imageUrl,
     bulletsKo: [
       truncate(bullets[0] ?? item.title, MAX_LINE_CHARS),
       truncate(bullets[1] ?? item.title, MAX_LINE_CHARS),
@@ -94,10 +98,11 @@ function parseLlmPayload(
   });
 
   try {
-    const parsed = JSON.parse(raw) as { bullets?: unknown; insight?: unknown };
+    const parsed = JSON.parse(raw) as { bullets?: unknown; insight?: unknown; titleKo?: unknown };
     if (Array.isArray(parsed.bullets) && typeof parsed.insight === "string") {
       const bullets = parsed.bullets.filter((b): b is string => typeof b === "string");
-      if (bullets.length > 0) return finish(bullets, parsed.insight);
+      const titleKo = typeof parsed.titleKo === "string" && parsed.titleKo.trim() ? parsed.titleKo : item.title;
+      if (bullets.length > 0) return finish(bullets, parsed.insight, titleKo);
     }
   } catch {
     // JSON이 아니면 줄 단위 파싱으로 넘어간다.
@@ -109,6 +114,7 @@ function parseLlmPayload(
   return finish(
     lines.slice(0, 3),
     lines.slice(3).join(" "),
+    item.title,
   );
 }
 
@@ -130,7 +136,7 @@ async function summarizeWithLlm(
         role: "system",
         content:
           "너는 게임 뉴스를 한국어로 요약하는 어시스턴트다. " +
-          "반드시 JSON으로만 답한다: {\"bullets\": [요약 3개], \"insight\": \"인사이트 1줄\"}. " +
+          "반드시 JSON으로만 답한다: {\"bullets\": [요약 3개], \"insight\": \"인사이트 1줄\", \"titleKo\": \"제목 한국어 번역 (원제와 같으면 그대로)\"}. " +
           "각 항목은 200자 이하. 아래 원문 URL·제목·appId에 해당하는 게임에만 근거해 작성하고 다른 게임을 언급하지 않는다.",
       },
       {

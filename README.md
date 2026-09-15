@@ -10,6 +10,9 @@ pnpm sniff   # BYOK 대화형 설정 (키·웹훅을 .env에 저장)
 pnpm start
 ```
 
+무설정 실행 안내: LLM 키가 없으면 폴백 요약 모드로 동작한다.
+웹훅이 없으면 파일 저장만 수행한다. 시작 시 현재 모드를 한 줄로 출력한다.
+
 ## 구조
 
 - `src/graph.ts` — LangGraph 워크플로우 (collect → filter → rank → summarize → verify → publish)

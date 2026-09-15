@@ -64,6 +64,14 @@ async function main(): Promise<void> {
   const { dryRun: isDryRun } = parseArgs(process.argv.slice(2));
   loadDotenv({ path: resolve(ROOT, ".env") });
 
+  const hasKey = Boolean(process.env.OPENAI_API_KEY);
+  const hasWebhook = Boolean(process.env.DISCORD_WEBHOOK_URL);
+  console.log(
+    `questail-postie 시작 (${process.env.MODEL ?? "gpt-4o-mini"}) — ` +
+      `${hasKey ? "LLM 요약 모드" : "폴백 요약 모드(키 없음)"} · ` +
+      `${hasWebhook ? "Discord 발행" : "파일 저장만(웹훅 없음)"}`,
+  );
+
   const audienceRaw = await readFile(resolve(ROOT, "audience.yaml"), "utf-8");
   const aud = parseYaml(audienceRaw) as Audience;
 

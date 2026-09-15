@@ -3,6 +3,7 @@ import { collectSteamNews, fetchAppMeta } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
 import { buildProfile } from "./personalize.js";
 import { filterNews, rankFinal } from "./select.js";
+import { buildDigest } from "./digest.js";
 import { summarizeItems } from "./summarize.js";
 import { verifySummaries } from "./verify.js";
 import { publishAll } from "./publish.js";
@@ -47,6 +48,10 @@ const PipelineState = Annotation.Root({
     default: () => [],
   }),
   verdicts: Annotation<Verdict[]>({
+    reducer: (_prev, next) => next,
+    default: () => [],
+  }),
+  digest: Annotation<string[]>({
     reducer: (_prev, next) => next,
     default: () => [],
   }),
@@ -166,7 +171,7 @@ export async function runPipeline(
       const { delivered } = await publishAll(state.summaries, {
         webhookUrl: env.webhookUrl,
         outPath: env.outPath,
-      });
+      }, state.digest);
       metrics.push({
         ts: nowIso(),
         stage: "publish",
@@ -175,13 +180,28 @@ export async function runPipeline(
       });
       return { delivered };
     })
+    .addNode("briefing", async (state) => {
+      const digest = await buildDigest(state.filtered, {
+        baseURL: env.baseURL,
+        apiKey: env.apiKey,
+        model: env.model,
+      });
+      metrics.push({
+        ts: nowIso(),
+        stage: "digest",
+        count: digest.linesKo.length,
+        detail: `pool=${state.filtered.length}`,
+      });
+      return { digest: digest.linesKo };
+    })
     .addEdge(START, "collect")
     .addEdge("collect", "personalize")
     .addEdge("personalize", "filter")
     .addEdge("filter", "rank")
     .addEdge("rank", "summarize")
     .addEdge("summarize", "verify")
-    .addEdge("verify", "publish")
+    .addEdge("verify", "briefing")
+    .addEdge("briefing", "publish")
     .addEdge("publish", END)
     .compile();
 
@@ -192,6 +212,7 @@ export async function runPipeline(
     finalSel: [],
     summaries: [],
     verdicts: [],
+    digest: [],
     delivered: false,
   });
 

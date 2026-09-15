@@ -6,6 +6,7 @@ export interface NewsItem {
   url: string;
   source: string;
   sourceName?: string;
+  imageUrl?: string;
   feedType: string;
   appId?: number;
   publishedAt: number;
@@ -22,15 +23,21 @@ export interface ScoredItem extends NewsItem {
 export interface Summary {
   id: string;
   title: string;
+  titleKo?: string;
   url: string;
   appId?: number;
   gameName?: string;
   platforms?: string[];
   sourceName?: string;
+  imageUrl?: string;
   bulletsKo: [string, string, string];
   insightKo: string;
   translated: boolean;
   sourceLang: string;
+}
+
+export interface Digest {
+  linesKo: string[];
 }
 
 export interface Verdict {
