@@ -76,3 +76,61 @@ export async function fetchOwnedAppIds(apiKey: string, steamId: string): Promise
     .map((g) => g.appid)
     .filter((n): n is number => Number.isInteger(n));
 }
+
+interface OwnedDetailResponse {
+  response: {
+    game_count?: number;
+    games?: Array<{ appid?: number; rtime_last_played?: number }>;
+  };
+}
+
+/** 보유 게임 상세(appId + 마지막 플레이 시각) 조회 — Tier1 판정에 사용. 읽기 전용. */
+export async function fetchOwnedGamesDetail(
+  apiKey: string,
+  steamId: string,
+): Promise<Array<{ appid: number; rtimeLastPlayed: number }>> {
+  const data = await steamGet<OwnedDetailResponse>("/IPlayerService/GetOwnedGames/v0001/", {
+    key: apiKey,
+    steamid: steamId,
+    include_appinfo: "false",
+    include_played_free_games: "true",
+  });
+  return (data.response.games ?? [])
+    .filter((g) => Number.isInteger(g.appid))
+    .map((g) => ({
+      appid: g.appid as number,
+      rtimeLastPlayed: Number(g.rtime_last_played ?? 0),
+    }));
+}
+
+/** 최근 N일 내 플레이한 appId 목록 (rtime_last_played 기준) — Tier1. 읽기 전용. */
+export async function fetchRecentlyPlayedAppIds(
+  apiKey: string,
+  steamId: string,
+  withinDays = 30,
+): Promise<number[]> {
+  const cutoff = Math.floor(Date.now() / 1000) - withinDays * 86400;
+  const games = await fetchOwnedGamesDetail(apiKey, steamId);
+  return games.filter((g) => g.rtimeLastPlayed >= cutoff).map((g) => g.appid);
+}
+
+interface WishlistResponse {
+  response?: {
+    items?: Array<{ appid?: number }>;
+  };
+}
+
+/**
+ * 위시리스트 appId 전수 조회 — Tier0. 읽기 전용.
+ * IStoreService/GetWishlist는 공개 API에서 제거된 상태(2026-09 실측 404)라
+ * 실패 시 빈 배열을 반환하고 호출자가 audience.yaml로 폴백한다.
+ */
+export async function fetchWishlistAppIds(apiKey: string, steamId: string): Promise<number[]> {
+  const data = await steamGet<WishlistResponse>("/IStoreService/GetWishlist/v1/", {
+    key: apiKey,
+    steamid: steamId,
+  });
+  return (data.response?.items ?? [])
+    .map((item) => item.appid)
+    .filter((n): n is number => Number.isInteger(n));
+}

@@ -1,6 +1,17 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
-import { collectSteamNews, fetchAppMeta } from "./collect/steam.js";
+import { dirname, resolve } from "node:path";
+import { fetchAppMeta } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
+import {
+  collectSaleWatch,
+  collectTierSteamNews,
+  filterUnseenSteam,
+  loadSeen,
+  resolveTiers,
+  saveSeen,
+  updateSeen,
+  type TierSet,
+} from "./collect/tiers.js";
 import { buildProfile } from "./personalize.js";
 import { filterNews, rankFinal } from "./select.js";
 import { buildDigest } from "./digest.js";
@@ -73,29 +84,49 @@ export async function runPipeline(
   const meta = new Map<number, { name: string; genres: string[]; keywords: string[]; platforms: string[] }>();
   const byId = new Map<string, ScoredItem>();
 
+  // 티어 확정 (STEAM 키 읽기 전용, 없으면 audience 폴백 — 질문 없이 진행).
+  // Tier1 최근 플레이가 있으면 라이브러리 대신 쓰고, 없으면 설정값을 유지한다.
+  // 하류 노드는 effAud를 그대로 받아 로직 변경 없이 동작한다.
+  const tiers: TierSet = await resolveTiers(aud);
+  const effAud: Audience = {
+    ...aud,
+    library_appids: tiers.recentAppIds.length > 0 ? tiers.recentAppIds : aud.library_appids,
+    wishlist_appids: tiers.wishlistAppIds,
+  };
+  const seenPath = resolve(dirname(env.metricsPath), "seen.json");
+
   const graph = new StateGraph(PipelineState)
     .addNode("collect", async () => {
-      const appIds = [...new Set([...aud.library_appids, ...aud.wishlist_appids])];
-      const [steamItems, rssItems] = await Promise.all([
-        collectSteamNews(appIds, aud.steam_news_count),
-        collectRss([...aud.reddit_feeds, ...aud.press_feeds], aud.batch.pool),
+      const [{ tier0, tier1 }, rssItems] = await Promise.all([
+        collectTierSteamNews(tiers),
+        collectRss([...effAud.reddit_feeds, ...effAud.press_feeds], effAud.batch.pool),
       ]);
+      const appIds = [...new Set([...effAud.library_appids, ...effAud.wishlist_appids])];
       await Promise.all(
         appIds.map(async (id) => {
           meta.set(id, await fetchAppMeta(id));
         }),
       );
+      const saleItems = await collectSaleWatch(tiers.wishlistAppIds, meta);
+      const seen = await loadSeen(seenPath);
+      const freshSteam = filterUnseenSteam([...tier0, ...tier1], seen);
+      updateSeen(seen, [...tier0, ...tier1]);
+      await saveSeen(seenPath, seen);
+      const steamItems = [...freshSteam, ...saleItems];
       const rawItems = [...steamItems, ...rssItems];
       metrics.push({
         ts: nowIso(),
         stage: "collect",
         count: rawItems.length,
-        detail: `steam=${steamItems.length} rss=${rssItems.length}`,
+        detail:
+          `steam=${steamItems.length}(fresh=${freshSteam.length} sale=${saleItems.length}) ` +
+          `rss=${rssItems.length} tier0=${tier0.length} tier1=${tier1.length} ` +
+          `tiers=${tiers.steamSource}`,
       });
       return { rawItems };
     })
     .addNode("personalize", async () => {
-      const profile = buildProfile(aud, meta);
+      const profile = buildProfile(effAud, meta);
       metrics.push({
         ts: nowIso(),
         stage: "personalize",
@@ -105,7 +136,7 @@ export async function runPipeline(
       return { profile };
     })
     .addNode("filter", async (state) => {
-      const filtered = filterNews(state.rawItems, aud);
+      const filtered = filterNews(state.rawItems, effAud);
       metrics.push({
         ts: nowIso(),
         stage: "filter",
@@ -117,7 +148,7 @@ export async function runPipeline(
     .addNode("rank", async (state) => {
       const profile = state.profile;
       if (!profile) throw new Error("personalize 노드가 먼저 실행되어야 합니다.");
-      const final = rankFinal(state.filtered, profile, aud);
+      const final = rankFinal(state.filtered, profile, effAud);
       for (const item of final) byId.set(item.id, item);
       metrics.push({
         ts: nowIso(),

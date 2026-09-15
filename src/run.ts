@@ -4,8 +4,15 @@ import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
 import { initEnv } from "./globalConfig.js";
 import { runPipeline } from "./graph.js";
-import { collectSteamNews, fetchAppMeta } from "./collect/steam.js";
+import { fetchAppMeta } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
+import {
+  collectSaleWatch,
+  collectTierSteamNews,
+  filterUnseenSteam,
+  loadSeen,
+  resolveTiers,
+} from "./collect/tiers.js";
 import { buildProfile } from "./personalize.js";
 import { filterNews, rankFinal } from "./select.js";
 import type { Audience } from "./types.js";
@@ -37,23 +44,34 @@ function parseArgs(argv: string[]): { dryRun: boolean } {
 }
 
 async function dryRun(aud: Audience): Promise<void> {
-  const appIds = [...new Set([...aud.library_appids, ...aud.wishlist_appids])];
-  const [steamItems, rssItems] = await Promise.all([
-    collectSteamNews(appIds, aud.steam_news_count),
-    collectRss([...aud.reddit_feeds, ...aud.press_feeds], aud.batch.pool),
+  const tiers = await resolveTiers(aud);
+  const effAud: Audience = {
+    ...aud,
+    library_appids: tiers.recentAppIds.length > 0 ? tiers.recentAppIds : aud.library_appids,
+    wishlist_appids: tiers.wishlistAppIds,
+  };
+  const [{ tier0, tier1 }, rssItems] = await Promise.all([
+    collectTierSteamNews(tiers),
+    collectRss([...effAud.reddit_feeds, ...effAud.press_feeds], effAud.batch.pool),
   ]);
+  const appIds = [...new Set([...effAud.library_appids, ...effAud.wishlist_appids])];
   const meta = new Map<number, { name: string; genres: string[]; keywords: string[]; platforms: string[] }>();
   await Promise.all(
     appIds.map(async (id) => {
       meta.set(id, await fetchAppMeta(id));
     }),
   );
-  const profile = buildProfile(aud, meta);
-  const rawItems = [...steamItems, ...rssItems];
-  const filtered = filterNews(rawItems, aud);
-  const final = rankFinal(filtered, profile, aud);
+  const saleItems = await collectSaleWatch(tiers.wishlistAppIds, meta);
+  // dry-run은 seen.json을 저장하지 않고 통과분만 미리 본다.
+  const seen = await loadSeen(resolve(ROOT, "store/seen.json"));
+  const freshSteam = filterUnseenSteam([...tier0, ...tier1], seen);
+  const profile = buildProfile(effAud, meta);
+  const rawItems = [...freshSteam, ...saleItems, ...rssItems];
+  const filtered = filterNews(rawItems, effAud);
+  const final = rankFinal(filtered, profile, effAud);
   console.log(
-    `dry-run: 수집 ${rawItems.length}건(steam=${steamItems.length} rss=${rssItems.length}) → 풀 ${filtered.length}건 → 선별 ${final.length}건 (library=${profile.libraryAppIds.length} wishlist=${profile.wishlistAppids.length})`,
+    `dry-run: 수집 ${rawItems.length}건(steam-fresh=${freshSteam.length} sale=${saleItems.length} rss=${rssItems.length}) → 풀 ${filtered.length}건 → 선별 ${final.length}건 ` +
+      `(tiers=${tiers.steamSource} wishlist=[${tiers.wishlistAppIds.join(",")}] recent=[${tiers.recentAppIds.join(",")}])`,
   );
   for (const item of final) {
     console.log(`- score=${item.score} [${item.labels.join("+")}] ${item.title}`);
