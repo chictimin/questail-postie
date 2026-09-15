@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { Digest, Summary } from "./types.js";
-import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback } from "./llmLocal.js";
+import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from "./llmLocal.js";
 
 export interface TranslateOptions {
   baseURL: string;
@@ -112,7 +112,7 @@ export async function translateToKorean(
   };
   const llmReady = canCallLlm(opts.baseURL, opts.apiKey);
   const client = llmReady
-    ? new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey) })
+    ? new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey), timeout: LLM_TIMEOUT_MS, maxRetries: LLM_MAX_RETRIES })
     : null;
 
   for (const [i, s] of summaries.entries()) {
@@ -134,7 +134,8 @@ export async function translateToKorean(
       onProgress?.(i + 1, summaries.length, s.title);
       continue;
     }
-    // 번역 실패 시 1회 재시도 (summarize/verify 재생성 패턴과 동일). 둘 다 실패해야 원어 발행.
+    // 번역 실패 시 총 2회 시도 (최초 1회 + 재시도 1회, summarize/verify 재생성 패턴과 동일).
+    // 둘 다 실패해야 원어 발행. SDK 내부 재시도와 곱해져 항목당 최악 12분 (llmLocal 상한 주석 참조).
     let t = null;
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < 2 && !t; attempt++) {

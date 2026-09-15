@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { Digest, NewsItem } from "./types.js";
-import { canCallLlm, effectiveApiKey, stripLlmNoise, warnFallback } from "./llmLocal.js";
+import { canCallLlm, effectiveApiKey, stripLlmNoise, warnFallback, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from "./llmLocal.js";
 
 export interface DigestOptions {
   baseURL: string;
@@ -33,7 +33,7 @@ export async function buildDigest(
 ): Promise<Digest> {
   if (items.length === 0 || !canCallLlm(opts.baseURL, opts.apiKey)) return { text: "" };
   try {
-    const client = new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey) });
+    const client = new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey), timeout: LLM_TIMEOUT_MS, maxRetries: LLM_MAX_RETRIES });
     const list = items
       .slice(0, MAX_ITEMS)
       .map((it, i) => `${i + 1}. ${it.title} — ${it.sourceName ?? it.source}`)

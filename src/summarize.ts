@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ScoredItem, Summary } from "./types.js";
-import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback } from "./llmLocal.js";
+import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from "./llmLocal.js";
 
 export interface SummarizeOptions {
   baseURL: string;
@@ -165,7 +165,7 @@ export async function summarizeItems(
   if (!canCallLlm(opts.baseURL, opts.apiKey)) {
     return items.map((item) => fallbackSummary(item, meta));
   }
-  const client = new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey) });
+  const client = new OpenAI({ baseURL: opts.baseURL, apiKey: effectiveApiKey(opts.apiKey), timeout: LLM_TIMEOUT_MS, maxRetries: LLM_MAX_RETRIES });
   const results: Summary[] = [];
   for (const [i, item] of items.entries()) {
     try {

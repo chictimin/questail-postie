@@ -3,6 +3,13 @@
  * sniff.ts의 isLocalhostUrl과 동일 규칙. sniff는 타 담당 영역이라 여기서 정의한다.
  */
 
+/**
+ * LLM 호출 상한: 타임아웃 180초 × SDK 시도 2회(최초 1 + 내부 재시도 1) = 호출당 최악 6분.
+ * translate는 바깥 재시도 루프가 한 겹 더 있어 항목당 최악 12분 (6분 × 바깥 2회).
+ */
+export const LLM_TIMEOUT_MS = 180_000;
+export const LLM_MAX_RETRIES = 1;
+
 /** 로컬호스트 baseURL 판정 (Ollama·LM Studio 등 로컬 추론 서버). */
 export function isLocalhostUrl(value: string): boolean {
   try {
@@ -44,8 +51,9 @@ export function extractJsonPayload(raw: string): string {
   return cleaned;
 }
 
-/** 폴백으로 내려갈 때 이유를 stderr에 한 줄 남긴다 (무음 catch 방지). */
+/** 폴백으로 내려갈 때 이유를 stderr에 한 줄 남긴다 (무음 catch 방지). 타임아웃은 구분 표기. */
 export function warnFallback(stage: string, err: unknown): void {
   const reason = err instanceof Error ? err.message : String(err);
-  console.error(`[${stage}] LLM 호출 실패, 폴백 사용: ${reason}`);
+  const kind = /timeout|timed out|abort/i.test(reason) ? "타임아웃" : "실패";
+  console.error(`[${stage}] LLM 호출 ${kind}(${LLM_TIMEOUT_MS}ms), 폴백 사용: ${reason}`);
 }
