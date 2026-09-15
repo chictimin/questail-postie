@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+store/metrics.jsonl
+output/
+*.log
+.DS_Store
