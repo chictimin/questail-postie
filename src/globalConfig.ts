@@ -1,8 +1,8 @@
 /**
- * questail 공용 전역 설정 — ~/.config/questail/.env (읽기 전용)
+ * questail 공용 전역 설정 — ~/.config/questail/.env (STEAM 키 전용 읽기·쓰기)
  * questail packages/core/src/cli.ts 패턴 그대로:
- * 전역 먼저 로드 후 로컬 .env 로드(로컬 우선, 미설정 키만 채움).
- * 전역 파일에는 쓰지 않는다 (STEAM 키는 questail CLI가 관리).
+ * 전역 먼저 로드 후 로컬 .env 로드(먼저 로드된 전역이 동점시 이긴다).
+ * 쓰기는 STEAM 키로 제한한다 (뉴스레터 설정·audience는 로컬 전용).
  * XDG_CONFIG_HOME이 있으면 그 아래 questail 디렉토리를 쓴다.
  */
 
