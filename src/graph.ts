@@ -104,7 +104,7 @@ export async function runPipeline(
   // 티어 확정 (STEAM 키 읽기 전용, 없으면 빈 티어 — RSS만으로 계속).
   // library = 최근 플레이(비면 보유 전체), wishlist = 위시 전수.
   // 하류 노드는 effAud를 그대로 받아 로직 변경 없이 동작한다.
-  const tiers: TierSet = await resolveTiers();
+  const tiers: TierSet = await resolveTiers(aud.demo_appids ?? []);
   const effAud: ResolvedAudience = {
     ...aud,
     library_appids: tiers.libraryAppIds,
@@ -158,7 +158,9 @@ export async function runPipeline(
         detail: `library=${profile.libraryAppIds.length} wishlist=${profile.wishlistAppids.length} noMeta=${profile.noMeta}`,
       });
       console.log(
-        `[2/9] 개인화 프로필 — 라이브러리 ${profile.libraryAppIds.length}종 · 위시리스트 ${profile.wishlistAppids.length}종`,
+        tiers.steamSource === "demo"
+          ? `[2/9] 개인화 프로필 — 데모 목록 ${tiers.libraryAppIds.length + tiers.wishlistAppIds.length}종 (Steam 키 미등록)`
+          : `[2/9] 개인화 프로필 — 라이브러리 ${profile.libraryAppIds.length}종 · 위시리스트 ${profile.wishlistAppids.length}종`,
       );
       return { profile };
     })

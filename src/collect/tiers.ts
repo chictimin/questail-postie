@@ -29,17 +29,25 @@ export interface TierSet {
   recentAppIds: number[];
   /** personalize용 라이브러리 — 최근 플레이, 비면 보유 전체 */
   libraryAppIds: number[];
-  /** 티어 출처: steam API로 확정 / 키 없음 */
-  steamSource: "steam" | "audience";
+  /** 티어 출처: steam API로 확정 / 키 없음(빈 티어) / 데모 목록 */
+  steamSource: "steam" | "audience" | "demo";
+}
+
+/** 데모 목록을 앞절반 라이브러리·뒷절반 위시로 나눈다 (양쪽 가산이 다 보이게). */
+function splitDemo(demoAppIds: number[]): { library: number[]; wishlist: number[] } {
+  const ids = [...new Set(demoAppIds.filter((n) => Number.isInteger(n) && n > 0))];
+  const mid = Math.ceil(ids.length / 2);
+  return { library: ids.slice(0, mid), wishlist: ids.slice(mid) };
 }
 
 /**
  * STEAM 키 읽기 전용으로 티어 확정. 질문 없이 진행한다.
- * - 키·SteamID 없음 → 전부 빈 배열. Steam 수집 0건이어도 RSS만으로 계속 돈다.
+ * - 키·SteamID 없음 → 데모 목록이 있으면 library·wishlist에 채우고 source "demo".
+ *   데모도 없으면 전부 빈 배열(RSS만으로 계속, source "audience").
  * - 키 있음 → 위시 전수(IWishlistService) + 최근 플레이(rtime_last_played 30일).
- *   최근 플레이가 비면 보유 전체를 라이브러리로 쓴다.
+ *   최근 플레이가 비면 보유 전체를 라이브러리로 쓴다. 데모 목록은 무시된다.
  */
-export async function resolveTiers(): Promise<TierSet> {
+export async function resolveTiers(demoAppIds: number[] = []): Promise<TierSet> {
   const apiKey = process.env.STEAM_API_KEY || "";
   const steamId = process.env.STEAM_ID || "";
   const empty: TierSet = {
@@ -48,7 +56,16 @@ export async function resolveTiers(): Promise<TierSet> {
     libraryAppIds: [],
     steamSource: "audience",
   };
-  if (!apiKey || !steamId) return empty;
+  if (!apiKey || !steamId) {
+    const demo = splitDemo(demoAppIds);
+    if (demo.library.length === 0 && demo.wishlist.length === 0) return empty;
+    return {
+      wishlistAppIds: demo.wishlist,
+      recentAppIds: demo.library,
+      libraryAppIds: demo.library,
+      steamSource: "demo",
+    };
+  }
   const [wishlist, owned] = await Promise.all([
     fetchWishlistAppIds(apiKey, steamId).catch(() => [] as number[]),
     fetchOwnedGamesDetail(apiKey, steamId).catch(

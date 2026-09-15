@@ -65,7 +65,16 @@ esbuild는 바이너리를 optionalDependencies로 받아 postinstall 없이 동
 
 ## Steam 연동 준비
 
-Steam 프로필이 있어야 한다. 막히면 여기를 본다.
+계정이 없어도 된다. 건너뛰면 데모 4종으로 돈다.
+
+데모 목록은 `audience.sample.yaml`의 `demo_appids`다.
+Palworld·Apex는 라이브러리, Stardew Valley·Elden Ring은 위시리스트로 배분된다.
+뉴스 수집은 공개 API라 키 없이도 개인화 점수·섹션이 정상 동작한다.
+키가 필요한 건 "이 사람의 목록이 뭔지" 알아내는 부분뿐이다.
+키를 등록하면 데모는 무시되고 실제 목록으로 대체된다.
+로그에 "데모 목록 4종 (Steam 키 미등록)"이 찍힌다. metrics는 `tiers=demo`다.
+
+Steam 프로필이 있으면 아래대로 등록한다.
 
 1. API 키 발급 — `https://steamcommunity.com/dev/apikey`. 도메인은 아무거나. 무료다.
 2. SteamID 입력 — 세 형태를 다 받는다 (`src/steamid.ts`).
@@ -131,6 +140,7 @@ MODEL=gpt-4o-mini
    `API 키 (없으면 Enter)`, `모델명` (기본값 `llama3.1`).
    **건너뛰기** — 확인 화면에서 URL·모델이 `(미사용)`으로 뜬다.
 3. **Steam 등록** — 상태 표시 후 `SteamID` 입력.
+   Enter로 건너뛰면 데모 4종으로 돈다.
    보유 게임 조회가 성공해야 전역 저장한다.
    실패하면 "Steam 등록 실패: ..." 한 줄 + 미등록으로 계속된다.
 4. **발행 설정** — `Discord 웹훅 URL`.
@@ -208,6 +218,8 @@ pnpm check:tiers     # 티어·seen·할인 픽스처 + 실환경 티어 확정
 
 ## 자주 막히는 지점
 
+- **Steam 키 없음** — 데모 4종으로 돈다. 자기 라이브러리가 아니다.
+  `tiers=demo`로 확인한다.
 - **보유 게임 0건** — 프로필 비공개가 1순위. 공개로 전환한다.
   그래도 0건이면 API 키·SteamID 확인.
 - **로컬 LLM 연결 실패** — `ollama list`로 실행 확인.

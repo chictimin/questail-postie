@@ -69,6 +69,8 @@ export interface Audience {
   platforms: string[];
   genres: string[];
   exclude: string[];
+  /** Steam 키가 없을 때만 쓰는 데모 목록. 키 등록 시 무시된다. */
+  demo_appids?: number[];
   /** 소스 가중치 — 피드 URL 부분 문자열 매칭. 키 없으면 default. */
   source_weights: Record<string, number>;
   weights: {

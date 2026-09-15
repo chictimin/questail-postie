@@ -54,7 +54,7 @@ function parseArgs(argv: string[]): { dryRun: boolean } {
 }
 
 async function dryRun(aud: Audience): Promise<void> {
-  const tiers = await resolveTiers();
+  const tiers = await resolveTiers(aud.demo_appids ?? []);
   const effAud: ResolvedAudience = {
     ...aud,
     library_appids: tiers.libraryAppIds,
@@ -80,7 +80,9 @@ async function dryRun(aud: Audience): Promise<void> {
   );
   const profile = buildProfile(effAud, meta);
   console.log(
-    `[2/4] 개인화 프로필 — 라이브러리 ${profile.libraryAppIds.length}종 · 위시리스트 ${profile.wishlistAppids.length}종`,
+    tiers.steamSource === "demo"
+      ? `[2/4] 개인화 프로필 — 데모 목록 ${tiers.libraryAppIds.length + tiers.wishlistAppIds.length}종 (Steam 키 미등록)`
+      : `[2/4] 개인화 프로필 — 라이브러리 ${profile.libraryAppIds.length}종 · 위시리스트 ${profile.wishlistAppids.length}종`,
   );
   const rawItems = [...freshSteam, ...saleItems, ...rssItems];
   const pools = filterNews(rawItems, effAud, profile);

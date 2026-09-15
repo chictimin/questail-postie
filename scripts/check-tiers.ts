@@ -97,6 +97,34 @@ console.log(
 if (process.env.STEAM_API_KEY && process.env.STEAM_ID) {
   if (tiers.wishlistAppIds.length === 0) fail("STEAM 키가 있는데 Tier0 위시리스트가 0건이다");
   if (tiers.libraryAppIds.length === 0) fail("STEAM 키가 있는데 라이브러리가 0건이다");
+  if (tiers.steamSource !== "steam") fail("STEAM 키가 있는데 steamSource가 steam이 아니다(데모 무시 확인)");
 }
+
+// ─── 데모 폴백 (프로세스 환경만 비운다. 전역·로컬 파일은 건드리지 않는다) ───
+const savedKey = process.env.STEAM_API_KEY;
+const savedId = process.env.STEAM_ID;
+delete process.env.STEAM_API_KEY;
+delete process.env.STEAM_ID;
+const demo = await resolveTiers([1623730, 1172470, 1940340, 1245620]);
+if (savedKey !== undefined) process.env.STEAM_API_KEY = savedKey;
+if (savedId !== undefined) process.env.STEAM_ID = savedId;
+if (demo.steamSource !== "demo") fail("키가 없으면 steamSource는 demo여야 한다");
+if (demo.libraryAppIds.join(",") !== "1623730,1172470") {
+  fail(`데모 앞절반은 라이브러리여야 한다 (got ${demo.libraryAppIds.join(",")})`);
+}
+if (demo.wishlistAppIds.join(",") !== "1940340,1245620") {
+  fail(`데모 뒷절반은 위시리스트여야 한다 (got ${demo.wishlistAppIds.join(",")})`);
+}
+if (demo.recentAppIds.join(",") !== demo.libraryAppIds.join(",")) {
+  fail("데모 recent는 라이브러리와 같아야 한다 (Tier1×3 수집용)");
+}
+const noDemo = await resolveTiers([]);
+if (!savedKey || !savedId) {
+  // 키 없을 때만 빈 티어 단언이 유효하다. 키가 있으면 위 호출도 steam 경로를 탄다.
+  if (noDemo.steamSource !== "audience" || noDemo.libraryAppIds.length !== 0 || noDemo.wishlistAppIds.length !== 0) {
+    fail("데모도 키도 없으면 빈 티어(audience)여야 한다");
+  }
+}
+console.log("demo fallback OK (키 없음→데모 배분, 데모 무시 확인)");
 
 console.log("OK check-tiers");

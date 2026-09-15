@@ -301,6 +301,7 @@ async function main(): Promise<void> {
   let steamKey = process.env.STEAM_API_KEY || "";
   let steamId64 = process.env.STEAM_ID || "";
   process.stdout.write(`현재: ${steamKey && steamId64 ? "전역 설정에 등록됨" : "(미등록)"}\n`);
+  process.stdout.write("계정이 없어도 Enter로 건너뛰면 데모 4종(공개 공지로 개인화 맛보기)으로 실행됩니다.\n");
   const steamInput = await textInput(
     ks,
     "SteamID (17자리 숫자·프로필 URL·vanity, Enter=건너뛰기)",
@@ -325,6 +326,7 @@ async function main(): Promise<void> {
       }
     }
   } else {
+    process.stdout.write("Steam 등록을 건너뜁니다. 데모 4종으로 실행됩니다.\n");
     steamId64 = "";
   }
 
@@ -341,7 +343,7 @@ async function main(): Promise<void> {
   process.stdout.write(`모델: ${provider === 2 ? "(미사용)" : model}\n`);
   process.stdout.write(`API 키: ${maskValue(provider === 2 ? "" : apiKey)}\n`);
   process.stdout.write(`Discord 웹훅: ${maskValue(finalWebhook)}\n`);
-  process.stdout.write(`Steam: ${steamId64 ? `등록 (${steamId64})` : "미등록"}\n`);
+  process.stdout.write(`Steam: ${steamId64 ? `등록 (${steamId64})` : "미등록 (데모 목록 4종 사용)"}\n`);
   const action = await menu(ks, "어떻게 할까요", ["저장 후 실행", "저장만", "취소"]);
   ks.close();
 

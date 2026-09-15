@@ -37,6 +37,24 @@ TypeScript + LangGraph.js + pnpm.
 - 라이브러리 = 최근 플레이 상위 15종. 없으면 보유 상위 15종으로 폴백한다.
   (상수 `TIER1_MAX_APPS=15`. 120종 전체 조회 폭증 방지)
 - 실측 `library=5`는 최근 플레이가 5종뿐이라서다. 위시는 전수다.
+- 데모 폴백 (키 미등록 리뷰어용):
+  - 배경: 키가 없으면 빈 티어라 RSS 30건만 수집됐다.
+  - 개인화 섹션이 비어 핵심 기능을 볼 수 없었다.
+  - `demo_appids` 4종으로 개인화가 돈다.
+  - 앞절반=라이브러리(Tier1×3), 뒷절반=위시리스트(Tier0×5).
+  - 가산 3.0과 2.0이 둘 다 보이게 절반씩 나눴다.
+  - 위시는 할인 감시 대상에 자동 포함된다.
+  - 선정 근거 (ISteamNews 직접 조회, 2026-09-15 실측):
+  - Palworld 0일·Apex 1일·Stardew 6일·Elden Ring 8일. 전부 8일 이내다.
+  - Hades(1145360)는 91일 전이라 탈락시켰다.
+  - 장르는 서바이벌·FPS·인디·RPG로 섞었다.
+  - 왜 키 없이 되는가: AppNews는 공개 API라 쿼리에 key가 없다.
+  - 키가 필요한 건 위시·보유 조회뿐이다. appId만 있으면 된다.
+  - 모드 표시: `steamSource`에 "demo" 값이 있다.
+  - metrics에 `tiers=demo`로 기록된다. 실행 기록만 봐도 모드가 드러난다.
+  - 조용히 돌지 않는다. 진행 로그에 "데모 목록 4종 (Steam 키 미등록)"이 찍힌다.
+  - sniff에도 안내·건너뜀 확인·확인 화면이 있다. 오해 방지용 설계다.
+  - 키가 있으면 데모는 무시된다. 데모도 비면 빈 티어로 간다.
 
 ## 2. 소스 채택표
 
@@ -53,6 +71,7 @@ TypeScript + LangGraph.js + pnpm.
 | PCGamesN (`https://www.pcgamesn.com/mainrss.xml`) | 75건 | press_feeds |
 | GamesIndustry.biz (`https://www.gamesindustry.biz/feed`) | 100건 | press_feeds |
 | RPG Site (`https://www.rpgsite.net/feed/`) | 25건 | press_feeds |
+| 데모 목록 4종 (키 없는 리뷰어용) | Palworld·Apex·Stardew·Elden Ring | 앞절반 라이브러리 + 뒷절반 위시. 키 있으면 무시 |
 | Rock Paper Shotgun RSS | 100건 | 검증됨, 파이프라인 미사용 |
 | Eurogamer RSS | 100건 | 검증됨, 파이프라인 미사용 |
 | Gematsu RSS | 20건 | 검증됨, 파이프라인 미사용 |
@@ -176,6 +195,12 @@ OK check:select
 `general order`에서 press 가산 항목이 선두다.
 소스 가중치가 순서에 반영된 근거다.
 `ko title match` 행은 한글 제목 매칭의 근거다.
+
+키 없는 dry-run 실측 (데모 모드):
+Steam 16건 수집(위시 2종×5 + 최근 2종×3).
+예선 개인화 16·일반 30, 본선 5+3.
+`score=5 library+recent` 항목 확인.
+(dry-run은 metrics를 남기지 않는다. §5 기록 없음)
 
 ## 4. 파이프라인 구조도
 
