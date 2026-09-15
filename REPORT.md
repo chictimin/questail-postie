@@ -1,8 +1,8 @@
 # questail-postie REPORT
 
 게임 라이브러리 기반 개인화 뉴스레터 에이전트 (TypeScript + LangGraph.js + pnpm).
-수치·URL은 작업 지시와 저장소 실측(`store/metrics.jsonl`, `scripts/check-select.ts` 실행 결과,
-`src/graph.ts`, `audience.yaml`, `output/latest.md`)만 사용. 추정 없음.
+수치·URL은 작업 지시와 저장소 실측(`store/metrics.jsonl`, `scripts/check-select.ts`·`scripts/check-tiers.ts` 실행 결과,
+`src/graph.ts`, `src/collect/tiers.ts`, `store/seen.json`, `audience.yaml`, `output/latest.md`)만 사용. 추정 없음.
 
 ## 1. 분야 및 독자 정의
 
@@ -10,7 +10,9 @@
 - 독자: 헤비 게이머, 엄호형 — 본인 Steam 라이브러리·위시리스트 타이틀의 소식을 놓치지 않으려는 독자.
 - 관심사: 신작·패치·할인 + 인디 (`audience.yaml`: platforms PC, genres RPG·인디).
 - 제외: e스포츠 (`audience.yaml` exclude: e스포츠 — 제목 포함 시 예선 탈락).
-- 개인화 단위: `library_appids: [440, 252490]`, `wishlist_appids: [1940340]`.
+- 개인화 단위(설정): `library_appids: [440, 252490]`, `wishlist_appids: [1940340]`.
+  실효는 티어 확정값 — 해당 런 `library=5 wishlist=1`
+  (Tier1 최근 플레이 5종이 library를 대체, 위시는 1종).
 
 ## 2. 소스 채택표
 
@@ -18,7 +20,9 @@
 
 | 소스 | 검증 결과 | 비고 |
 | --- | --- | --- |
-| Steam AppNews API (`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/`) | 키 불필요. appid 440 2건 호출 성공(수집 스모크), 252490 실측 | 파이프라인 `steam_news_count: 5`/앱 |
+| Steam AppNews Tier0 — 위시 전수 (`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/`) | tier0=5 (위시 1종×5, 키 불필요) | `TIER0_NEWS_COUNT=5` (`src/collect/tiers.ts`) |
+| Steam AppNews Tier1 — 최근 30일 플레이 (`https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/`) | tier1=15 (최근 5종×3, 키 불필요) | `TIER1_NEWS_COUNT=3`, `TIER1_RECENT_DAYS=30` |
+| Steam 할인 감시 (Store `appdetails` `price_overview`) | 해당 런 sale=0 (20%+ 없음) | 20%+ 시 `source=steam-sale` 합성 (`SALE_DISCOUNT_MIN_PERCENT=20`) |
 | r/Games RSS (`https://www.reddit.com/r/Games/new/.rss`) | 25건 | reddit_feeds |
 | PC Gamer RSS (`https://www.pcgamer.com/rss/`) | 50건 | press_feeds |
 | VG247 (`https://www.vg247.com/feed`) | 100건 | press_feeds |
@@ -44,16 +48,21 @@ VG247 약2.3M · Siliconera 1.52M · Shacknews 1.19M (Semrush 2026-06/07, Simila
 
 ### 실제 파이프라인 사용 (`audience.yaml` 기준)
 
-- Steam API + Reddit 3종(r/Games·r/indiegames·r/GameDeals — 429 시 해당 피드 0건으로 수집 계속) + 언론 5종(PC Gamer·VG247·PCGamesN·GamesIndustry.biz·RPG Site).
+- Tier0(위시 전수×5) + Tier1(최근 30일×3) + 할인 감시(20%+, `steam-sale` 합성) +
+  seen.json 증분(Steam만, RSS 제외) + RSS 그대로(Reddit 3종 — 429 시 해당 피드 0건으로 수집 계속 + 언론 5종).
+- 위시리스트 API(`IStoreService/GetWishlist`)는 공개 API에서 제거된 상태(2026-09 실측 404 — `src/steamid.ts`)라
+  실패 시 빈 배열 → `resolveTiers`가 `audience.yaml` 전수로 폴백(`src/collect/tiers.ts`).
+  해당 런 live `wishlist=[1940340]`은 audience 값과 동일(폴백).
 - RPS·Eurogamer·Gematsu·Kotaku는 검증済이나 `audience.yaml` 미포함으로 미사용.
 
 ## 3. 선별 로직 설계
 
 흐름: personalize → filter → rank (`src/graph.ts` 노드 순서).
 
-- personalize (`src/personalize.ts` `buildProfile`): Steam Store 메타에서 게임명 인덱스 구축.
+- personalize (`src/personalize.ts` `buildProfile`, 입력은 티어 확정 `effAud`): Steam Store 메타에서 게임명 인덱스 구축.
   `titleIndex`에 라이브러리·위시리스트 게임명 등록. 항상 개인화 프로필을 반환한다
   (라이브러리·위시리스트 appId, 가중치, recency_hours를 그대로 담음).
+  해당 런은 Tier1 대체로 `library=5 wishlist=1`, titleIndex 6건. filter·rank 로직 자체는 변경 없음(하류 그대로).
   한글명 색인: Store 한글명에서 한글 구간(`[가-힣][가-힣\s]*[가-힣]`, 4자 이상)을 뽑아
   영문 정규명과 함께 `names`에 등록하므로, 한글 제목 기사도 제목 일치 가산 대상이 된다.
 - 예선 filter (`src/select.ts` `filterNews`): 제외어(예: e스포츠) 제목 포함 제거 → URL 중복 제거 →
@@ -92,10 +101,14 @@ graph LR
     START --> collect --> personalize --> filter --> rank --> summarize --> verify --> briefing --> publish --> END
 ```
 
-- collect: `collectSteamNews`(library+위시리스트 appId, 앱당 5건) + `collectRss`(reddit+press, pool 상한) 병렬,
-  `fetchAppMeta`로 게임명·장르 캐시. metrics: `steam=15 rss=30`.
-- personalize: `buildProfile` → `library=2 wishlist=1`, titleIndex 3건.
-- filter: pool 45건 → 30건.
+- collect: `resolveTiers` 확정 → `collectTierSteamNews`(Tier0 위시 전수×5 + Tier1 최근30일×3) +
+  `collectRss`(reddit+press, pool 상한) 병렬, `fetchAppMeta`로 게임명·장르 캐시,
+  `collectSaleWatch`(위시 20%+ → `steam-sale` 합성) 후
+  `loadSeen`→`filterUnseenSteam`→`updateSeen`→`saveSeen`(`store/seen.json`, Steam만).
+  metrics: `steam=20(fresh=20 sale=0) rss=30 tier0=5 tier1=15 tiers=steam`.
+- personalize: `buildProfile(effAud)` → 해당 런 `library=5 wishlist=1`, titleIndex 6건
+  (`effAud.library`는 Tier1이 있으면 recent로 대체, 없으면 audience 유지).
+- filter: pool 50건 → 30건.
 - rank: 30건 → 최종 5건 (labels 기록).
 - summarize: `summarizeItems` — OpenAI 호환 엔드포인트(`OPENAI_BASE_URL`·`OPENAI_API_KEY`·`MODEL`은
   `run.ts`가 `.env`에서 읽어 인자로 전달). 외국어 원문은 한국어 3줄 요약+인사이트 1줄(`translated: true`),
@@ -104,7 +117,8 @@ graph LR
   플랫폼·게임명 표기: `fetchAppMeta`가 Store API `platforms`에서 Windows/macOS/Linux를 추출하고
   (`src/collect/steam.ts`), `graph.ts`가 이 메타 맵을 `summarizeItems`에 전달해
   `Summary`에 `gameName`·`platforms`·`sourceName`을 기록한다(폴백·LLM 경로 공통).
-  출처 표기: Steam 수집분은 `sourceName: "Steam 공지"`, RSS 수집분은 피드 title(60자 절취)을 `sourceName`으로 둔다.
+  출처 표기: Steam 수집분은 `sourceName: "Steam 공지"`, 할인 감시분은 `sourceName: "Steam 할인"`,
+  RSS 수집분은 피드 title(60자 절취)을 `sourceName`으로 둔다.
 - verify: `verifySummaries` — 검사 3종(제목 핵심 토큰 포함 / url http+원문 매핑 / 각 200자 이하),
   실패 시 `resummarize` 1회 재생성 후 재검사, 그래도 실패하면 스킵+verdict 기록.
 - briefing: `buildDigest` (`src/digest.ts`) — 선별 풀(`filtered`, 최대 30건)의 제목 목록을 보고
@@ -120,30 +134,44 @@ graph LR
 
 ## 5. 실행 기록
 
-`store/metrics.jsonl` 최신 런 실측 (2026-09-15T03:41, 전 구간):
+`store/metrics.jsonl` 최신 완주 런 실측 (2026-09-15T04:12, 티어 적용 후 전 구간):
 
 | stage | count | detail |
 | --- | --- | --- |
-| collect | 45 | steam=15 rss=30 |
-| personalize | 3 | library=2 wishlist=1 |
-| filter | 30 | pool=45 |
+| collect | 50 | steam=20(fresh=20 sale=0) rss=30 tier0=5 tier1=15 tiers=steam |
+| personalize | 6 | library=5 wishlist=1 |
+| filter | 30 | pool=50 |
 | rank | 5 | labels=recent×5 (해당 런은 최신 가산 5건) |
-| summarize | 5 | translated=5 (03:41:25→03:41:33, 약 8초) |
+| summarize | 5 | translated=5 (04:12:48→04:12:57, 약 9초) |
 | verify | 5 | 5 pass (재생성 0건) |
 | digest | 1 | pool=30 |
 | publish | 5 | delivered=true |
 
-- collect 45(steam15+rss30) → personalize → filter 30 → rank 5 →
-  summarize translated 5/5(약 8초) → verify 5 pass → digest 1줄 → publish delivered=true.
+- tier0=5(위시 1종×5) + tier1=15(최근 5종×3) = fresh 20, sale 0(20%+ 해당 없음),
+  rss 30 유지 → collect 50 → filter 30 → rank 5 →
+  summarize translated 5/5 → verify 5 pass → digest 1줄 → publish delivered=true.
+- 증분 증거: `store/seen.json` 6앱 커서 기록 + 이후 `pnpm start --dry-run` 재실행 시
+  `steam-fresh=0 sale=0 rss=30` → 풀 30 → 선별 5 (신규 Steam분 0, RSS로만 5건 선정).
+
+`pnpm check:tiers` 실측:
+
+```text
+tiers constants: Tier0=5 Tier1=3 recent=30d sale>=20%
+seen: in=5 fresh=3 ids=steam-440-101,steam-440-102,steam-252490-1
+seen incremental OK (cursor advances, replays blocked)
+sale threshold OK (19→drop, 20/75→steam-sale)
+tiers live: source=steam wishlist=[1940340] recent=[1139980,2868840,3453910,4174310,4800590]
+OK check-tiers
+```
+
 - `output/latest.md`: 선정 5건 한국어 요약 저장 확인
-  (JUJUTSU KAISEN RUMBLE·Persona 5: The Phantom X·Aniimo·Another Eden Begins·Arc Raiders,
+  (열람 시점: Aniimo·Arc Raiders·Kingmakers·Wardogs·Level-5 생성형 AI,
   `## 오늘의 분위기` 1줄 + 항목별 제목+3줄 요약+인사이트+출처+원문 링크 형식.
-  현행 파일 기준 5건 모두 RSS분이라 게임 행은 생략,
-  출처 행은 `출처: newest submissions : Games · [원문](…)` /
-  `출처: PCGamer latest · [원문](…)` 형태).
+  현행 파일 기준 5건 모두 RSS분이라 게임 행은 생략).
 - 주의: `output/latest.md`는 매 실행마다 덮어쓴다. 위 인용은 열람 시점 파일 기준이며 후속 런에 덮어씌워질 수 있다.
 - Discord: 해당 런 `delivered=true`(metrics 기록). 단 실제 Discord 화면 캡처는 미확인으로 둔다.
-- 참고: 직전 런들은 `translated=0`(폴백)·`delivered=false`(웹훅 미설정) 상태였으며,
+- 참고: 티어 적용 전 런(03:41)은 collect 45(steam15+rss30)·personalize library=2였으며,
+  그 이전 런들은 `translated=0`(폴백)·`delivered=false`(웹훅 미설정) 상태였고
   파일 저장(`output/latest.md`)은 항상 수행.
 
 ## 6. 프로젝트 회고
@@ -161,8 +189,9 @@ graph LR
 
 개선점 (Could):
 
-- SteamID 자동 연동: 현재 라이브러리·위시리스트는 `audience.yaml` 수기 입력.
-  `STEAM_API_KEY`·`STEAM_ID`(.env에 자리만 예약, MVP 미사용)로 소유 게임·위시리스트를 자동 동기화하면
-  엄호형 독자 정의에 더 부합한다.
+- SteamID 티어 확정済: `resolveTiers`(`src/collect/tiers.ts`)가
+  `STEAM_API_KEY`·`STEAM_ID`(전역 `~/.config/questail/.env` 읽기 전용, `src/globalConfig.ts`)로
+  Tier1 최근 30일 플레이를 확정하고, 없으면 `audience.yaml`을 유지한다(질문 없이 폴백).
+  위시 API 404로 위시는 audience 수기값 유지가 남는다.
 - 미출시·e스포츠 제외: e스포츠는 제외어 처리済이나, 미출시작 루머·반복 보도 등
   제외 조건을 `exclude` 키워드 이상으로(예: 출시 상태·중복 주제 클러스터링) 정교화할 여지가 있다.
