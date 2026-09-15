@@ -6,7 +6,7 @@
 
 ```sh
 pnpm install
-cp .env.example .env
+pnpm sniff   # BYOK 대화형 설정 (키·웹훅을 .env에 저장)
 pnpm start
 ```
 
