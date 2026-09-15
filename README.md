@@ -14,7 +14,7 @@ Steam 위시리스트·최근 플레이 게임의 소식을 수집·선별·요�
 ## 설치부터 첫 실행까지
 
 ```sh
-git clone <저장소> && cd questail-postie
+git clone https://github.com/chictimin/questail-postie.git && cd questail-postie
 pnpm install
 cp audience.sample.yaml audience.yaml
 pnpm sniff
