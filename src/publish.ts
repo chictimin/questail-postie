@@ -8,7 +8,6 @@ export interface PublishOptions {
 }
 
 const DISCORD_LIMIT = 2000;
-const DISCORD_CHUNK = 1900;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -88,30 +87,20 @@ function itemBlock(s: Summary): { text: string; imageUrl?: string } {
   return { text: parts.join("\n"), imageUrl: s.imageUrl };
 }
 
-function toDiscordPayloads(summaries: Summary[], digest: string[]): DiscordPayload[] {
+export function toDiscordPayloads(summaries: Summary[], digest: string[]): DiscordPayload[] {
   if (summaries.length === 0 && digest.length === 0) {
     return [{ content: "Questail Postie: 선정된 소식이 없습니다.", embeds: [] }];
   }
-  const blocks: Array<{ text: string; imageUrl?: string }> = [];
-  const head = digestSection(digest, false);
-  if (head.length > 0) blocks.push({ text: head.join("\n") });
-  for (const s of summaries) blocks.push(itemBlock(s));
-
   const payloads: DiscordPayload[] = [];
-  let current = "";
-  let embeds: DiscordPayload["embeds"] = [];
-  const flush = () => {
-    if (current.length > 0) payloads.push({ content: current, embeds });
-    current = "";
-    embeds = [];
-  };
-  for (const b of blocks) {
-    const next = current.length === 0 ? b.text : `${current}\n\n${b.text}`;
-    if (next.length > DISCORD_CHUNK && current.length > 0) flush();
-    current = current.length === 0 ? b.text : `${current}\n\n${b.text}`;
-    if (b.imageUrl && embeds.length < 10) embeds.push({ image: { url: b.imageUrl } });
+  const head = digestSection(digest, false);
+  if (head.length > 0) payloads.push({ content: head.join("\n"), embeds: [] });
+  for (const s of summaries) {
+    const block = itemBlock(s);
+    payloads.push({
+      content: block.text,
+      embeds: block.imageUrl ? [{ image: { url: block.imageUrl } }] : [],
+    });
   }
-  flush();
   return payloads;
 }
 
