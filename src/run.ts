@@ -42,7 +42,7 @@ async function dryRun(aud: Audience): Promise<void> {
     collectSteamNews(appIds, aud.steam_news_count),
     collectRss([...aud.reddit_feeds, ...aud.press_feeds], aud.batch.pool),
   ]);
-  const meta = new Map<number, { name: string; genres: string[]; keywords: string[] }>();
+  const meta = new Map<number, { name: string; genres: string[]; keywords: string[]; platforms: string[] }>();
   await Promise.all(
     appIds.map(async (id) => {
       meta.set(id, await fetchAppMeta(id));
@@ -53,7 +53,7 @@ async function dryRun(aud: Audience): Promise<void> {
   const filtered = filterNews(rawItems, aud);
   const final = rankFinal(filtered, profile, aud);
   console.log(
-    `dry-run: 수집 ${rawItems.length}건(steam=${steamItems.length} rss=${rssItems.length}) → 풀 ${filtered.length}건 → 선별 ${final.length}건 (mode=${profile.mode})`,
+    `dry-run: 수집 ${rawItems.length}건(steam=${steamItems.length} rss=${rssItems.length}) → 풀 ${filtered.length}건 → 선별 ${final.length}건 (library=${profile.libraryAppIds.length} wishlist=${profile.wishlistAppids.length})`,
   );
   for (const item of final) {
     console.log(`- score=${item.score} [${item.labels.join("+")}] ${item.title}`);

@@ -47,13 +47,14 @@ async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
   } catch {
     return [];
   }
-  let feed: { items?: Array<Record<string, unknown>> };
+  let feed: { title?: string; items?: Array<Record<string, unknown>> };
   try {
     feed = (await parser.parseString(xml)) as typeof feed;
   } catch {
     return [];
   }
   const source = feedSource(feedUrl);
+  const sourceName = feed.title?.trim().slice(0, 60) || source;
   const out: NewsItem[] = [];
   for (const raw of feed.items ?? []) {
     const entry = raw as {
@@ -79,11 +80,12 @@ async function fetchFeedItems(feedUrl: string): Promise<NewsItem[]> {
       const parsed = Date.parse(dateStr);
       if (!Number.isNaN(parsed)) publishedAt = Math.floor(parsed / 1000);
     }
-    out.push({
-      id: `rss-${hash16(link)}`,
-      title,
-      url: link,
-      source,
+        out.push({
+          id: `rss-${hash16(link)}`,
+          title,
+          url: link,
+          source,
+          sourceName,
       feedType: "rss",
       publishedAt,
       author,

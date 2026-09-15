@@ -325,8 +325,9 @@ async function saveEnv(entries: Record<string, string>): Promise<void> {
 }
 
 // ─── audience.yaml surgical 저장 ────────────────────────────────
-// 전체 stringify 재쓰기 금지(포맷 churn 방지). 아래 3개 최상위 키의
-// 라인(플로·블록 리스트 모두)만 교체하고 나머지 원문은 그대로 둔다.
+// 전체 stringify 재쓰기 금지(포맷 churn 방지). library/wishlist 2개
+// 최상위 키의 라인(플로·블록 리스트 모두)만 교체하고, personalize 키는
+// 발견되면 삭제한다. 나머지 원문은 그대로 둔다.
 
 function formatIdList(ids: number[]): string {
   return `[${ids.join(", ")}]`;
@@ -334,14 +335,13 @@ function formatIdList(ids: number[]): string {
 
 export function patchAudienceYaml(
   raw: string,
-  patch: { personalize: boolean; library_appids: number[]; wishlist_appids: number[] },
+  patch: { library_appids: number[]; wishlist_appids: number[] },
 ): string {
   const replacements: Array<[RegExp, string]> = [
-    [/^personalize:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `personalize: ${patch.personalize}`],
     [/^library_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `library_appids: ${formatIdList(patch.library_appids)}`],
     [/^wishlist_appids:[^\n]*(?:\n[ \t]+-[^\n]*)*/m, `wishlist_appids: ${formatIdList(patch.wishlist_appids)}`],
   ];
-  let out = raw;
+  let out = raw.replace(/^personalize:[^\n]*(?:\n[ \t]+-[^\n]*)*\n?/m, "");
   for (const [re, line] of replacements) {
     if (re.test(out)) {
       out = out.replace(re, line);
@@ -387,27 +387,19 @@ async function main(): Promise<void> {
     model = await chooseModel(ks, baseURL, apiKey || undefined, process.env.MODEL || "llama3.1");
   }
 
-  header("개인화 설정");
+  header("게임 라이브러리 설정");
   const audRaw = await readFile(AUDIENCE_FILE, "utf-8");
   const aud = parseYaml(audRaw) as {
-    personalize: boolean;
     library_appids: number[];
     wishlist_appids: number[];
     [key: string]: unknown;
   };
-  const personalizeIdx = await menu(ks, "개인화 모드", [
-    `개인화 사용 (현재: ${aud.personalize ? "사용" : "미사용"})`,
-    "비개인화 (인기·중요도순)",
-  ]);
-  const personalize = personalizeIdx === 0;
   let libraryAppIds: number[] = Array.isArray(aud.library_appids) ? aud.library_appids : [];
   let wishlistAppIds: number[] = Array.isArray(aud.wishlist_appids) ? aud.wishlist_appids : [];
-  if (personalize) {
-    const libInput = await textInput(ks, "라이브러리 appID (쉼표 구분)", libraryAppIds.join(", "));
-    if (libInput.trim()) libraryAppIds = parseAppIds(libInput);
-    const wishInput = await textInput(ks, "위시리스트 appID (쉼표 구분)", wishlistAppIds.join(", "));
-    if (wishInput.trim()) wishlistAppIds = parseAppIds(wishInput);
-  }
+  const libInput = await textInput(ks, "라이브러리 appID (쉼표 구분)", libraryAppIds.join(", "));
+  if (libInput.trim()) libraryAppIds = parseAppIds(libInput);
+  const wishInput = await textInput(ks, "위시리스트 appID (쉼표 구분)", wishlistAppIds.join(", "));
+  if (wishInput.trim()) wishlistAppIds = parseAppIds(wishInput);
 
   header("발행 설정");
   if (process.env.DISCORD_WEBHOOK_URL) {
@@ -422,11 +414,8 @@ async function main(): Promise<void> {
   process.stdout.write(`모델: ${provider === 2 ? "(미사용)" : model}\n`);
   process.stdout.write(`API 키: ${maskValue(provider === 2 ? "" : apiKey)}\n`);
   process.stdout.write(`Discord 웹훅: ${maskValue(finalWebhook)}\n`);
-  process.stdout.write(`개인화: ${personalize ? "사용" : "미사용"}\n`);
-  if (personalize) {
-    process.stdout.write(`라이브러리: [${libraryAppIds.join(", ")}]\n`);
-    process.stdout.write(`위시리스트: [${wishlistAppIds.join(", ")}]\n`);
-  }
+  process.stdout.write(`라이브러리: [${libraryAppIds.join(", ")}]\n`);
+  process.stdout.write(`위시리스트: [${wishlistAppIds.join(", ")}]\n`);
   const action = await menu(ks, "어떻게 할까요", ["저장 후 실행", "저장만", "취소"]);
   ks.close();
 
@@ -443,7 +432,6 @@ async function main(): Promise<void> {
   await writeFile(
     AUDIENCE_FILE,
     patchAudienceYaml(audRaw, {
-      personalize,
       library_appids: libraryAppIds,
       wishlist_appids: wishlistAppIds,
     }),

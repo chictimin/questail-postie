@@ -65,7 +65,7 @@ export async function runPipeline(
   env: PipelineEnv,
 ): Promise<{ passed: Summary[]; verdicts: Verdict[]; metrics: MetricRecord[] }> {
   const metrics: MetricRecord[] = [];
-  const meta = new Map<number, { name: string; genres: string[]; keywords: string[] }>();
+  const meta = new Map<number, { name: string; genres: string[]; keywords: string[]; platforms: string[] }>();
   const byId = new Map<string, ScoredItem>();
 
   const graph = new StateGraph(PipelineState)
@@ -95,7 +95,7 @@ export async function runPipeline(
         ts: nowIso(),
         stage: "personalize",
         count: profile.titleIndex.length,
-        detail: `mode=${profile.mode}`,
+        detail: `library=${profile.libraryAppIds.length} wishlist=${profile.wishlistAppids.length}`,
       });
       return { profile };
     })
@@ -127,7 +127,7 @@ export async function runPipeline(
         baseURL: env.baseURL,
         apiKey: env.apiKey,
         model: env.model,
-      });
+      }, meta);
       metrics.push({
         ts: nowIso(),
         stage: "summarize",
@@ -148,7 +148,7 @@ export async function runPipeline(
             baseURL: env.baseURL,
             apiKey: env.apiKey,
             model: env.model,
-          });
+          }, meta);
           return retry ?? s;
         },
       );

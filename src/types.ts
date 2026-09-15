@@ -5,6 +5,7 @@ export interface NewsItem {
   title: string;
   url: string;
   source: string;
+  sourceName?: string;
   feedType: string;
   appId?: number;
   publishedAt: number;
@@ -23,6 +24,9 @@ export interface Summary {
   title: string;
   url: string;
   appId?: number;
+  gameName?: string;
+  platforms?: string[];
+  sourceName?: string;
   bulletsKo: [string, string, string];
   insightKo: string;
   translated: boolean;
@@ -44,7 +48,6 @@ export interface MetricRecord {
 }
 
 export interface Audience {
-  personalize: boolean;
   library_appids: number[];
   wishlist_appids: number[];
   platforms: string[];
@@ -66,7 +69,6 @@ export interface Audience {
 }
 
 export interface PersonalProfile {
-  mode: "personal" | "general";
   libraryAppIds: number[];
   wishlistAppids: number[];
   titleIndex: Array<{ appId: number; list: "library" | "wishlist"; names: string[] }>;

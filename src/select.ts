@@ -63,7 +63,7 @@ export function rankFinal(
       score += profile.weights.recency;
       labels.add("recent");
     }
-    if (labels.size === 0) labels.add("general");
+    if (labels.size === 0) labels.add("unranked");
     return { ...item, score, labels: [...labels] };
   });
   scored.sort((a, b) => b.score - a.score || b.publishedAt - a.publishedAt);

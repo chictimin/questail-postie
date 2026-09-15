@@ -7,7 +7,6 @@ const H = 3600;
 const DAY = 24 * H;
 
 const aud: Audience = {
-  personalize: true,
   library_appids: [440],
   wishlist_appids: [1940340],
   platforms: ["PC"],
@@ -21,8 +20,8 @@ const aud: Audience = {
 };
 
 const meta = new Map([
-  [440, { name: "Team Fortress 2", genres: ["액션"], keywords: [] }],
-  [1940340, { name: "Stardew Valley", genres: ["RPG"], keywords: [] }],
+  [440, { name: "Team Fortress 2", genres: ["액션"], keywords: [], platforms: ["Windows", "macOS", "Linux"] }],
+  [1940340, { name: "Stardew Valley", genres: ["RPG"], keywords: [], platforms: ["Windows", "macOS", "Linux"] }],
 ]);
 
 const items: NewsItem[] = [
@@ -101,8 +100,7 @@ function fail(msg: string): never {
 }
 
 const profile = buildProfile(aud, meta);
-console.log(`profile mode=${profile.mode} titleIndex=${profile.titleIndex.length}`);
-if (profile.mode !== "personal") fail("profile.mode should be personal");
+console.log(`profile titleIndex=${profile.titleIndex.length} library=${profile.libraryAppIds.join(",")}`);
 if (profile.titleIndex.length !== 2) fail("titleIndex should have 2 entries");
 
 const filtered = filterNews(items, aud);

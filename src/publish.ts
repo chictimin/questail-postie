@@ -14,6 +14,19 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function gameLine(s: Summary): string {
+  if (s.gameName) {
+    const plat =
+      s.platforms && s.platforms.length > 0 ? s.platforms.join("/") : "플랫폼 미상";
+    return `게임: ${s.gameName} · ${plat}`;
+  }
+  return "플랫폼 미상";
+}
+
+function sourceSite(s: Summary): string {
+  return s.sourceName ?? "미상";
+}
+
 function toMarkdown(summaries: Summary[]): string {
   const lines: string[] = [
     `# Questail Postie picks (${today()})`,
@@ -33,7 +46,8 @@ function toMarkdown(summaries: Summary[]): string {
     lines.push(`> ${s.insightKo}`);
     lines.push(``);
     if (s.appId !== undefined) lines.push(`- appId: ${s.appId}`);
-    lines.push(`- 원문: [링크](${s.url})`);
+    lines.push(`- ${gameLine(s)}`);
+    lines.push(`- 출처: ${sourceSite(s)} · [원문](${s.url})`);
     lines.push(``);
   }
   return lines.join("\n");
@@ -44,7 +58,7 @@ function toDiscordText(summaries: Summary[]): string {
   return summaries
     .map(
       (s) =>
-        `**${s.title}**\n- ${s.bulletsKo.join("\n- ")}\n> ${s.insightKo}\n${s.url}`,
+        `**${s.title}**\n- ${s.bulletsKo.join("\n- ")}\n> ${s.insightKo}\n${gameLine(s)}\n[출처: ${sourceSite(s)}](<${s.url}>)`,
     )
     .join("\n\n");
 }

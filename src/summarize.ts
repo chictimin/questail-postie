@@ -32,19 +32,31 @@ function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) : text;
 }
 
+export interface GameMeta {
+  name: string;
+  platforms: string[];
+}
+
 /** LLM 없이 쓰는 폴백: 본문 앞 3문장 + 제목 기반 인사이트. 파이프라인이 멈추지 않게 한다. */
-function fallbackSummary(item: ScoredItem): Summary {
+function fallbackSummary(
+  item: ScoredItem,
+  meta?: Map<number, GameMeta>,
+): Summary {
   const sentences = splitSentences(item.content);
   const bullets: [string, string, string] = [
     truncate(sentences[0] ?? item.title, MAX_LINE_CHARS),
     truncate(sentences[1] ?? item.title, MAX_LINE_CHARS),
     truncate(sentences[2] ?? item.title, MAX_LINE_CHARS),
   ];
+  const game = item.appId !== undefined ? meta?.get(item.appId) : undefined;
   return {
     id: item.id,
     title: item.title,
     url: item.url,
     appId: item.appId,
+    gameName: game?.name,
+    platforms: game?.platforms ?? [],
+    sourceName: item.sourceName,
     bulletsKo: bullets,
     insightKo: truncate(
       `${item.title} 관련 소식이므로 원문에서 세부 내용을 확인하세요.`,
@@ -55,13 +67,22 @@ function fallbackSummary(item: ScoredItem): Summary {
   };
 }
 
-function parseLlmPayload(raw: string, item: ScoredItem, translated: boolean): Summary {
+function parseLlmPayload(
+  raw: string,
+  item: ScoredItem,
+  translated: boolean,
+  meta?: Map<number, GameMeta>,
+): Summary {
   const sourceLang = detectSourceLang(item);
+  const game = item.appId !== undefined ? meta?.get(item.appId) : undefined;
   const finish = (bullets: string[], insight: string): Summary => ({
     id: item.id,
     title: item.title,
     url: item.url,
     appId: item.appId,
+    gameName: game?.name,
+    platforms: game?.platforms ?? [],
+    sourceName: item.sourceName,
     bulletsKo: [
       truncate(bullets[0] ?? item.title, MAX_LINE_CHARS),
       truncate(bullets[1] ?? item.title, MAX_LINE_CHARS),
@@ -96,6 +117,7 @@ async function summarizeWithLlm(
   model: string,
   item: ScoredItem,
   isKoreanSource: boolean,
+  meta?: Map<number, GameMeta>,
 ): Promise<Summary> {
   const content = item.content.slice(0, MAX_CONTENT_CHARS);
   const task = isKoreanSource
@@ -125,24 +147,25 @@ async function summarizeWithLlm(
     ],
   });
   const raw = response.choices[0]?.message?.content ?? "";
-  return parseLlmPayload(raw, item, !isKoreanSource);
+  return parseLlmPayload(raw, item, !isKoreanSource, meta);
 }
 
 export async function summarizeItems(
   items: ScoredItem[],
   opts: SummarizeOptions,
+  meta?: Map<number, GameMeta>,
 ): Promise<Summary[]> {
   if (!opts.apiKey) {
-    return items.map(fallbackSummary);
+    return items.map((item) => fallbackSummary(item, meta));
   }
   const client = new OpenAI({ baseURL: opts.baseURL, apiKey: opts.apiKey });
   const results: Summary[] = [];
   for (const item of items) {
     try {
       const isKoreanSource = hasKorean(`${item.title}\n${item.content}`);
-      results.push(await summarizeWithLlm(client, opts.model, item, isKoreanSource));
+      results.push(await summarizeWithLlm(client, opts.model, item, isKoreanSource, meta));
     } catch {
-      results.push(fallbackSummary(item));
+      results.push(fallbackSummary(item, meta));
     }
   }
   return results;
