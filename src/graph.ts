@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { dirname, resolve } from "node:path";
-import { fetchAppMeta } from "./collect/steam.js";
+import { fetchAppMetaMap } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
 import {
   collectSaleWatch,
@@ -123,11 +123,7 @@ export async function runPipeline(
         collectRss([...effAud.reddit_feeds, ...effAud.press_feeds], effAud.batch.pool),
       ]);
       const appIds = [...new Set([...effAud.library_appids, ...effAud.wishlist_appids])];
-      await Promise.all(
-        appIds.map(async (id) => {
-          meta.set(id, await fetchAppMeta(id));
-        }),
-      );
+      for (const [id, metaItem] of await fetchAppMetaMap(appIds)) meta.set(id, metaItem);
       const saleItems = await collectSaleWatch(tiers.wishlistAppIds, meta);
       const seen = await loadSeen(seenPath);
       const freshSteam = filterUnseenSteam([...tier0, ...tier1], seen);

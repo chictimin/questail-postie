@@ -11,6 +11,9 @@ importers:
       '@langchain/langgraph':
         specifier: ^0.2.0
         version: 0.2.74(@langchain/core@0.3.80(openai@4.104.0(zod@3.25.76)))(zod-to-json-schema@3.25.2(zod@3.25.76))
+      '@questail/core':
+        specifier: file:../../code/questail/packages/core
+        version: file:../../code/questail/packages/core
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
@@ -228,6 +231,10 @@ packages:
     peerDependenciesMeta:
       zod-to-json-schema:
         optional: true
+
+  '@questail/core@file:../../code/questail/packages/core':
+    resolution: {directory: ../../code/questail/packages/core, type: directory}
+    hasBin: true
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -684,6 +691,10 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+
+  '@questail/core@file:../../code/questail/packages/core':
+    dependencies:
+      zod: 3.25.76
 
   '@types/json-schema@7.0.15': {}
 

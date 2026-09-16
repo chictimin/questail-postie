@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { Digest, Summary } from "./types.js";
-import { canCallLlm, effectiveApiKey, extractJsonPayload, warnFallback, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from "./llmLocal.js";
+import { LLM_MAX_RETRIES, LLM_TIMEOUT_MS, extractJsonPayload, warnFallback } from "@questail/core";
+import { canCallLlm, effectiveApiKey } from "./llmLocal.js";
 
 export interface TranslateOptions {
   baseURL: string;

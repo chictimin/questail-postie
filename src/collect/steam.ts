@@ -1,4 +1,10 @@
 import type { NewsItem } from "../types.js";
+import {
+  AppMetaRateLimitedError,
+  fetchAppMeta as coreFetchAppMeta,
+  fetchAppMetaBatch,
+  type GameMeta as CoreGameMeta,
+} from "@questail/core";
 
 interface SteamNewsItemRaw {
   gid: string;
@@ -16,7 +22,8 @@ interface SteamNewsResponse {
   };
 }
 
-interface AppMeta {
+/** postie 하류(graph·tiers·summarize)가 쓰는 메타 형태. core GameMeta의 부분집합이다. */
+export interface AppMeta {
   name: string;
   genres: string[];
   keywords: string[];
@@ -24,8 +31,6 @@ interface AppMeta {
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
-
-const metaCache = new Map<number, AppMeta>();
 
 function toNewsItem(appId: number, raw: SteamNewsItemRaw): NewsItem {
   return {
@@ -68,47 +73,61 @@ export async function collectSteamNews(
   return out;
 }
 
+/**
+ * core GameMeta → postie AppMeta.
+ * core platforms는 소문자 키(windows·mac·linux)라 기존 표시명(Windows·macOS·Linux)으로 되돌린다.
+ * name이 비면 appId 문자열 폴백 — 숫자 폴백을 넣지 않는 기존 규칙과 동일하다.
+ */
+function adaptMeta(appId: number, meta: CoreGameMeta): AppMeta {
+  const label: Record<string, string> = { windows: "Windows", mac: "macOS", linux: "Linux" };
+  return {
+    name: meta.name ?? String(appId),
+    genres: meta.genres ?? [],
+    keywords: meta.keywords ?? [],
+    platforms: (meta.platforms ?? []).map((p) => label[p] ?? p),
+  };
+}
+
+function fallbackMeta(appId: number): AppMeta {
+  return { name: String(appId), genres: [], keywords: [], platforms: [] };
+}
+
+/**
+ * 단일 조회 (할인 감시 폴백용). core 디스크 캐시·1.5초 스로틀을 그대로 쓴다.
+ * 쿨다운 중이면 파이프라인을 죽이지 않고 이름 폴백으로 진행한다.
+ */
 export async function fetchAppMeta(appId: number): Promise<AppMeta> {
-  const cached = metaCache.get(appId);
-  if (cached) return cached;
-  const fallback: AppMeta = { name: String(appId), genres: [], keywords: [], platforms: [] };
   try {
-    const endpoint = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=korean`;
-    const res = await fetch(endpoint, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      metaCache.set(appId, fallback);
-      return fallback;
+    return adaptMeta(appId, await coreFetchAppMeta(String(appId)));
+  } catch (err) {
+    if (err instanceof AppMetaRateLimitedError) {
+      console.error(`[collect] appdetails 쿨다운, 메타 없이 진행: ${err.message}`);
+      return fallbackMeta(appId);
     }
-    const data = (await res.json()) as Record<
-      string,
-      { success: boolean; data?: { name?: string; genres?: Array<{ description?: string }>; categories?: Array<{ description?: string }>; platforms?: { windows?: boolean; mac?: boolean; linux?: boolean } } }
-    >;
-    const entry = data[String(appId)];
-    if (!entry?.success || !entry.data) {
-      metaCache.set(appId, fallback);
-      return fallback;
-    }
-    const plats = entry.data.platforms ?? {};
-    const meta: AppMeta = {
-      name: entry.data.name ?? String(appId),
-      genres: (entry.data.genres ?? [])
-        .map((g) => g.description ?? "")
-        .filter((s) => s.length > 0),
-      keywords: (entry.data.categories ?? [])
-        .map((c) => c.description ?? "")
-        .filter((s) => s.length > 0),
-      platforms: [
-        plats.windows ? "Windows" : "",
-        plats.mac ? "macOS" : "",
-        plats.linux ? "Linux" : "",
-      ].filter((s) => s.length > 0),
-    };
-    metaCache.set(appId, meta);
-    return meta;
-  } catch {
-    metaCache.set(appId, fallback);
-    return fallback;
+    throw err;
   }
+}
+
+/**
+ * 전수 조회용 순차 배치. Promise.all 전량 병렬은 429 위험이 실측 확인되어 쓰지 않는다.
+ * core fetchAppMetaBatch가 요청 간격 1.5초를 강제한다.
+ * onRateLimit "stop" — 정기 실행 뉴스레터는 5분 정지보다 메타 일부 누락이 낫다.
+ * 반환에 없는 appId는 아래 폴백으로 채워 호출부가 undefined 접근 없이 진행한다.
+ */
+export async function fetchAppMetaMap(appIds: number[]): Promise<Map<number, AppMeta>> {
+  const map = new Map<number, AppMeta>();
+  try {
+    const metas = await fetchAppMetaBatch(appIds.map(String), { onRateLimit: "stop" });
+    metas.forEach((meta, i) => map.set(appIds[i] as number, adaptMeta(appIds[i] as number, meta)));
+  } catch (err) {
+    if (err instanceof AppMetaRateLimitedError) {
+      console.error(`[collect] appdetails 쿨다운, 메타 없이 진행: ${err.message}`);
+    } else {
+      throw err;
+    }
+  }
+  for (const appId of appIds) {
+    if (!map.has(appId)) map.set(appId, fallbackMeta(appId));
+  }
+  return map;
 }

@@ -1,14 +1,11 @@
 /**
- * 로컬 LLM 엔드포인트 판정 + 응답 전처리 (summarize.ts·digest.ts 공유)
- * sniff.ts의 isLocalhostUrl과 동일 규칙. sniff는 타 담당 영역이라 여기서 정의한다.
+ * 로컬 LLM 호출 판단 + postie 환경변수 해석.
+ * 순수 헬퍼(stripLlmNoise·extractJsonPayload·warnFallback·타임아웃 상수)는
+ * @questail/core 공개 API로 교체되어 여기서 정의하지 않는다.
+ * OpenAI SDK 호출부는 summarize·translate·digest에 둔다.
  */
 
-/**
- * LLM 호출 상한: 타임아웃 180초 × SDK 시도 2회(최초 1 + 내부 재시도 1) = 호출당 최악 6분.
- * translate는 바깥 재시도 루프가 한 겹 더 있어 항목당 최악 12분 (6분 × 바깥 2회).
- */
-export const LLM_TIMEOUT_MS = 180_000;
-export const LLM_MAX_RETRIES = 1;
+import { getLlmOptions } from "@questail/core";
 
 /** 로컬호스트 baseURL 판정 (Ollama·LM Studio 등 로컬 추론 서버). */
 export function isLocalhostUrl(value: string): boolean {
@@ -35,25 +32,40 @@ export function effectiveApiKey(apiKey?: string): string {
   return apiKey && apiKey.trim() ? apiKey : "local";
 }
 
-/** thinking 모델의 <think> 블록과 코드펜스를 제거한다. */
-export function stripLlmNoise(raw: string): string {
-  return raw
-    .replace(/<think>[\s\S]*?(<\/think>|$)/gi, "")
-    .replace(/```(?:\w+)?\n?/g, "");
+// ─── LLM 환경변수 해석 (QUESTAIL 우선·OPENAI 폴백) ────────────
+// D2 확정: postie 기존 .env·README에 OPENAI_BASE_URL/OPENAI_API_KEY/MODEL 이름이
+// 박혀 있어 전면 개명하지 않는다. core getLlmOptions()(QUESTAIL_LLM_*)가 비어 있을 때만
+// 기존 이름을 쓴다.
+
+export interface ResolvedLlmEnv {
+  baseURL: string;
+  apiKey?: string;
+  model: string;
 }
 
-/** 요약 응답에서 JSON 페이로드를 꺼낸다. 없으면 노이즈 제거된 원문을 돌려준다. */
-export function extractJsonPayload(raw: string): string {
-  const cleaned = stripLlmNoise(raw);
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) return cleaned.slice(start, end + 1);
-  return cleaned;
+let fallbackWarned = false;
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
-/** 폴백으로 내려갈 때 이유를 stderr에 한 줄 남긴다 (무음 catch 방지). 타임아웃은 구분 표기. */
-export function warnFallback(stage: string, err: unknown): void {
-  const reason = err instanceof Error ? err.message : String(err);
-  const kind = /timeout|timed out|abort/i.test(reason) ? "타임아웃" : "실패";
-  console.error(`[${stage}] LLM 호출 ${kind}(${LLM_TIMEOUT_MS}ms), 폴백 사용: ${reason}`);
+export function resolveLlmEnv(): ResolvedLlmEnv {
+  const q = getLlmOptions();
+  const qBase = q.baseUrl;
+  const qKey = q.apiKey;
+  const qModel = q.model;
+  const oBase = nonEmpty(process.env.OPENAI_BASE_URL);
+  const oKey = nonEmpty(process.env.OPENAI_API_KEY);
+  const oModel = nonEmpty(process.env.MODEL);
+  const usedFallback = (!qBase && Boolean(oBase)) || (!qKey && Boolean(oKey)) || (!qModel && Boolean(oModel));
+  if (usedFallback && !fallbackWarned) {
+    fallbackWarned = true;
+    console.error("OPENAI_* 사용 중 — QUESTAIL_LLM_*로 옮기면 questail과 설정을 공유합니다");
+  }
+  return {
+    baseURL: qBase ?? oBase ?? "https://api.openai.com/v1",
+    apiKey: qKey ?? oKey,
+    model: qModel ?? oModel ?? "gpt-4o-mini",
+  };
 }

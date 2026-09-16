@@ -4,8 +4,9 @@ import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
 import { initEnv } from "./globalConfig.js";
+import { resolveLlmEnv } from "./llmLocal.js";
 import { runPipeline } from "./graph.js";
-import { fetchAppMeta } from "./collect/steam.js";
+import { fetchAppMetaMap } from "./collect/steam.js";
 import { collectRss } from "./collect/rss.js";
 import {
   collectSaleWatch,
@@ -66,11 +67,7 @@ async function dryRun(aud: Audience): Promise<void> {
   ]);
   const appIds = [...new Set([...effAud.library_appids, ...effAud.wishlist_appids])];
   const meta = new Map<number, { name: string; genres: string[]; keywords: string[]; platforms: string[] }>();
-  await Promise.all(
-    appIds.map(async (id) => {
-      meta.set(id, await fetchAppMeta(id));
-    }),
-  );
+  for (const [id, metaItem] of await fetchAppMetaMap(appIds)) meta.set(id, metaItem);
   const saleItems = await collectSaleWatch(tiers.wishlistAppIds, meta);
   // dry-run은 seen.json을 저장하지 않고 통과분만 미리 본다.
   const seen = await loadSeen(resolve(ROOT, "store/seen.json"));
@@ -116,10 +113,11 @@ async function main(): Promise<void> {
   const { dryRun: isDryRun } = parseArgs(process.argv.slice(2));
   initEnv(resolve(ROOT, ".env"));
 
-  const hasKey = Boolean(process.env.OPENAI_API_KEY);
+  const llm = resolveLlmEnv();
+  const hasKey = Boolean(llm.apiKey);
   const hasWebhook = Boolean(process.env.DISCORD_WEBHOOK_URL);
   console.log(
-    `questail-postie 시작 (${process.env.MODEL ?? "gpt-4o-mini"}) — ` +
+    `questail-postie 시작 (${llm.model}) — ` +
       `${hasKey ? "LLM 요약 모드" : "폴백 요약 모드(키 없음)"} · ` +
       `${hasWebhook ? "Discord 발행" : "파일 저장만(웹훅 없음)"}`,
   );
@@ -135,9 +133,9 @@ async function main(): Promise<void> {
   const metricsPath = resolve(ROOT, "store/metrics.jsonl");
 
   const { passed, verdicts, metrics } = await runPipeline(aud, {
-    baseURL: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
-    apiKey: process.env.OPENAI_API_KEY || undefined,
-    model: process.env.MODEL ?? "gpt-4o-mini",
+    baseURL: llm.baseURL,
+    apiKey: llm.apiKey,
+    model: llm.model,
     webhookUrl: process.env.DISCORD_WEBHOOK_URL || undefined,
     outPath,
     metricsPath,
