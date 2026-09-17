@@ -7,3 +7,6 @@ output/*
 !output/latest.md
 *.log
 .DS_Store
+
+# 로그 계층 — 정본도 아니고 사람이 읽는 문서도 아니다 (실행마다 갱신)
+store/
